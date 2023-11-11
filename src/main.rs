@@ -1,9 +1,9 @@
 use env_logger::Builder;
 use ethers::prelude::*;
+use eyre::Result;
 use log::LevelFilter;
 use log::{error, info};
 use std::env;
-use std::error::Error;
 use std::sync::Arc;
 use structopt::StructOpt;
 
@@ -24,7 +24,7 @@ struct Opt {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+async fn main() -> Result<()> {
     // Initialize env_logger
     let mut builder = Builder::from_default_env();
 
@@ -56,7 +56,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 async fn generate_and_send_transaction(
     provider: &Provider<Http>,
     wallet: &LocalWallet,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<()> {
     let client = SignerMiddleware::new(provider.clone(), wallet.clone());
 
     // Generate a new wallet for the recipient
