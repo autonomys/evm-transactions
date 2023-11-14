@@ -1,11 +1,15 @@
 use env_logger::Builder;
 use ethers::prelude::*;
-use eyre::Result;
+use eyre::{Report, Result};
+use log::info;
 use log::LevelFilter;
-use log::{error, info};
 use std::env;
 use std::sync::Arc;
 use structopt::StructOpt;
+use tokio::time::{sleep, Duration};
+
+mod transaction_manager;
+use transaction_manager::TransactionManager;
 
 // Define a struct to hold the command-line arguments
 #[derive(StructOpt, Debug)]
@@ -19,12 +23,13 @@ struct Opt {
     #[structopt(short, long)]
     tx_count: usize,
 
+    // The private key of the sender
     #[structopt(short, long)]
     private_key: String,
 }
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> Result<(), Report> {
     // Initialize env_logger
     let mut builder = Builder::from_default_env();
 
@@ -34,31 +39,30 @@ async fn main() -> Result<()> {
     }
 
     builder.init();
+
     // Parse command-line arguments
     let opt = Opt::from_args();
-    // Start an Actix system
 
-    // Setting up Ethereum client
-    let provider = Arc::new(Provider::<Http>::try_from(opt.node_url)?);
-    let wallet: LocalWallet = opt.private_key.parse()?;
+    let provider = Arc::new(Provider::<Http>::try_from(opt.node_url).map_err(Report::msg)?);
+    let wallet: LocalWallet = opt.private_key.parse().map_err(Report::msg)?;
     let wallet = wallet.clone().with_chain_id(1002u64);
+
+    let tx_manager = TransactionManager::new(provider.clone(), &wallet);
 
     // Transaction generation and sending
     for i in 0..opt.tx_count {
         info!("Transaction #{}", i + 1);
-        generate_and_send_transaction(&provider, &wallet).await?;
+        generate_and_send_transaction(&tx_manager)
+            .await
+            .map_err(Report::msg)?;
+        // sleep(Duration::from_millis(2500)).await;
     }
 
     Ok(())
 }
 
 // Assuming this function signature
-async fn generate_and_send_transaction(
-    provider: &Provider<Http>,
-    wallet: &LocalWallet,
-) -> Result<()> {
-    let client = SignerMiddleware::new(provider.clone(), wallet.clone());
-
+async fn generate_and_send_transaction(tx_manager: &TransactionManager) -> Result<(), Report> {
     // Generate a new wallet for the recipient
     let recipient_wallet = Wallet::new(&mut rand::thread_rng());
     let to = recipient_wallet.address();
@@ -66,24 +70,10 @@ async fn generate_and_send_transaction(
     // Define the transaction
     let tx = TransactionRequest::new()
         .to(to)
-        .value(1e8 as u64) // Example amount
-        .from(wallet.address());
+        .value(1e8 as u64)
+        .from(tx_manager.get_address());
 
-    match client.send_transaction(tx, None).await {
-        Ok(pending_tx) => {
-            info!(
-                "Transaction {:?} sent. Waiting for confirmation...",
-                *pending_tx
-            );
-
-            let _receipt = pending_tx.confirmations(3).await?;
-            info!("Transaction confirmed");
-        }
-        Err(e) => {
-            error!("Error sending transaction: {:?}", e);
-            return Err(e.into());
-        }
-    }
+    tx_manager.handle_transaction(tx).await?;
 
     Ok(())
 }
