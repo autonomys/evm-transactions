@@ -1,15 +1,20 @@
-use crate::transaction_manager::TransactionManager;
-use ethers::{
-    core::rand,
-    signers::{Signer, Wallet},
-    types::TransactionRequest,
-};
+use crate::{contract_calls::set_array_transaction, transaction_manager::TransactionManager};
+use ethers::prelude::*;
 use eyre::Result;
 use log::info;
+
+pub enum TransactionType {
+    Transfer,
+    SetArray {
+        contract_address: Address,
+        count: U256,
+    },
+}
 
 pub async fn send_continuous_transactions(
     transaction_manager: TransactionManager,
     num_transactions: usize,
+    transaction_type: &TransactionType,
 ) -> Result<()> {
     let mut futures = Vec::with_capacity(num_transactions);
 
@@ -19,7 +24,20 @@ pub async fn send_continuous_transactions(
             i + 1,
             transaction_manager.get_address()
         );
-        let tx_future = generate_and_send_transfer(&transaction_manager).await;
+        let tx_future = match transaction_type {
+            TransactionType::Transfer => generate_and_send_transfer(&transaction_manager).await,
+            TransactionType::SetArray {
+                contract_address,
+                count,
+            } => {
+                generate_and_send_set_array(
+                    &transaction_manager,
+                    contract_address.clone(),
+                    count.clone(),
+                )
+                .await
+            }
+        };
         futures.push(Box::pin(tx_future));
     }
 
@@ -37,6 +55,17 @@ async fn generate_and_send_transfer(tx_manager: &TransactionManager) -> Result<(
         .value(1e6 as u64)
         .from(tx_manager.get_address());
 
+    tx_manager.handle_transaction(tx).await?;
+
+    Ok(())
+}
+
+async fn generate_and_send_set_array(
+    tx_manager: &TransactionManager,
+    load_contract_address: Address,
+    count: U256,
+) -> Result<()> {
+    let tx = set_array_transaction(load_contract_address, count)?;
     tx_manager.handle_transaction(tx).await?;
 
     Ok(())

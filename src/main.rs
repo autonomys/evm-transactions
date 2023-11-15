@@ -2,12 +2,12 @@ mod contract_calls;
 mod generate_transactions;
 mod transaction_manager;
 
-use contract_calls::bulk_transfer_transaction;
+use contract_calls::*;
 use env_logger::Builder;
 use ethers::prelude::*;
 use eyre::{Report, Result};
 use futures::future::join_all;
-use generate_transactions::send_continuous_transactions;
+use generate_transactions::*;
 use log::LevelFilter;
 use std::env;
 use std::sync::Arc;
@@ -31,6 +31,7 @@ struct Opt {
 struct EnvVars {
     funder_private_key: String,
     fund_contract_address: Address,
+    load_contract_address: Address,
     rpc_url: String,
 }
 impl EnvVars {
@@ -39,11 +40,15 @@ impl EnvVars {
         let fund_contract_address: Address = env::var("FUNDING_CONTRACT_ADDRESS")
             .expect("FUND_CONTRACT_ADDRESS must be set")
             .parse()?;
+        let load_contract_address: Address = env::var("LOAD_CONTRACT_ADDRESS")
+            .expect("LOAD_CONTRACT_ADDRESS must be set")
+            .parse()?;
         let rpc_url = env::var("RPC_URL").expect("RPC_URL must be set");
         {
             Ok(EnvVars {
                 funder_private_key,
                 fund_contract_address,
+                load_contract_address,
                 rpc_url,
             })
         }
@@ -66,6 +71,7 @@ async fn main() -> Result<(), Report> {
     let EnvVars {
         funder_private_key,
         fund_contract_address,
+        load_contract_address,
         rpc_url,
     } = EnvVars::get_env_vars()?;
 
@@ -89,16 +95,20 @@ async fn main() -> Result<(), Report> {
         addresses,
         (100_000_000_000_000_000 as u128).into(),
         fund_contract_address,
-    )
-    .await?;
+    )?;
+
     funder_tx_manager.handle_transaction(tx).await?;
 
+    let transaction_type = TransactionType::SetArray {
+        contract_address: load_contract_address,
+        count: 100.into(),
+    };
     // Transaction generation and sending
     let transactions = wallets
         .iter()
         .map(|w| {
             let tx_manager = TransactionManager::new(provider.clone(), &w);
-            send_continuous_transactions(tx_manager.clone(), tx_count)
+            send_continuous_transactions(tx_manager.clone(), tx_count, &transaction_type)
         })
         .collect::<Vec<_>>();
 

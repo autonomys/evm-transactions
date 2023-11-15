@@ -5,10 +5,10 @@ use eyre::Result;
 use log::info;
 use serde_json::from_str;
 
-pub(crate) async fn bulk_transfer_transaction(
+pub(crate) fn bulk_transfer_transaction(
     to_addresses: Vec<Address>,
     funding_amount: U256,
-    fund_contract_address: H160,
+    fund_contract_address: Address,
 ) -> Result<TransactionRequest> {
     let abi = include_str!("./abi/Fund.json");
     let contract_abi: Abi = from_str(abi)?;
@@ -34,8 +34,21 @@ pub(crate) async fn bulk_transfer_transaction(
     Ok(tx_req)
 }
 
-// pub(crate) async fn heavy_call() -> Result<TransactionRequest> {
-//     let abi = include_str!("./abi/Load.json");
-//     let contract_abi: Abi = from_str(abi)?;
-//     let function = contract_abi.function("set_array")?;
-// }
+pub(crate) fn set_array_transaction(
+    load_contract_address: Address,
+    count: U256,
+) -> Result<TransactionRequest> {
+    let abi = include_str!("./abi/Load.json");
+    let contract_abi: Abi = from_str(abi)?;
+    let function = contract_abi.function("setArray")?;
+    let args = count.into_token();
+    let calldata = function.encode_input(&[args])?;
+
+    let tx_req = TransactionRequest {
+        to: Some(NameOrAddress::Address(load_contract_address)),
+        data: Some(calldata.into()),
+        ..Default::default()
+    };
+
+    Ok(tx_req)
+}
