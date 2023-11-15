@@ -1,31 +1,53 @@
+mod fund_addresses;
+mod generate_transactions;
+mod transaction_manager;
+
 use env_logger::Builder;
 use ethers::prelude::*;
 use eyre::{Report, Result};
-use log::info;
+use fund_addresses::bulk_transfer_transaction;
+use futures::future::join_all;
+use generate_transactions::send_continuous_transactions;
 use log::LevelFilter;
 use std::env;
 use std::sync::Arc;
 use structopt::StructOpt;
-use tokio::time::{sleep, Duration};
-
-mod transaction_manager;
 use transaction_manager::TransactionManager;
 
+const CHAIN_ID: u64 = 1002u64;
 // Define a struct to hold the command-line arguments
 #[derive(StructOpt, Debug)]
 #[structopt(name = "EVM Transaction Generator")]
 struct Opt {
-    // Sets the Ethereum node URL
-    #[structopt(short, long)]
-    node_url: String,
-
     // The number of transactions to generate
     #[structopt(short, long)]
     tx_count: usize,
 
-    // The private key of the sender
-    #[structopt(short, long)]
+    // The number of accounts to use to generate transactions
+    #[structopt(short = "a", long)]
+    num_accounts: usize,
+}
+
+struct EnvVars {
     private_key: String,
+    fund_contract_address: Address,
+    rpc_url: String,
+}
+impl EnvVars {
+    fn get_env_vars() -> eyre::Result<EnvVars> {
+        let private_key = env::var("PRIVATE_KEY").expect("PRIVATE_KEY must be set");
+        let fund_contract_address: Address = env::var("FUND_CONTRACT_ADDRESS")
+            .expect("FUND_CONTRACT_ADDRESS must be set")
+            .parse()?;
+        let rpc_url = env::var("RPC_URL").expect("RPC_URL must be set");
+        {
+            Ok(EnvVars {
+                private_key,
+                fund_contract_address,
+                rpc_url,
+            })
+        }
+    }
 }
 
 #[tokio::main]
@@ -40,40 +62,46 @@ async fn main() -> Result<(), Report> {
 
     builder.init();
 
+    dotenv::from_path(".env")?;
+    let EnvVars {
+        private_key,
+        fund_contract_address,
+        rpc_url,
+    } = EnvVars::get_env_vars()?;
+
     // Parse command-line arguments
-    let opt = Opt::from_args();
+    let Opt {
+        tx_count,
+        num_accounts,
+    } = Opt::from_args();
 
-    let provider = Arc::new(Provider::<Http>::try_from(opt.node_url).map_err(Report::msg)?);
-    let wallet: LocalWallet = opt.private_key.parse().map_err(Report::msg)?;
-    let wallet = wallet.clone().with_chain_id(1002u64);
+    let provider = Arc::new(Provider::<Http>::try_from(rpc_url).map_err(Report::msg)?);
+    let funder_wallet: LocalWallet = private_key.parse()?;
+    let funder_wallet = funder_wallet.clone().with_chain_id(CHAIN_ID);
+    let funder_tx_manager = TransactionManager::new(provider.clone(), &funder_wallet);
 
-    let tx_manager = TransactionManager::new(provider.clone(), &wallet);
+    let wallets = (0..num_accounts)
+        .map(|_| Wallet::new(&mut rand::thread_rng()).with_chain_id(CHAIN_ID))
+        .collect::<Vec<_>>();
+    let addresses = wallets.iter().map(|w| w.address()).collect::<Vec<_>>();
+
+    let tx = bulk_transfer_transaction(
+        addresses,
+        (100_000_000_000_000_000 as u128).into(),
+        fund_contract_address,
+    )
+    .await?;
+    funder_tx_manager.handle_transaction(tx).await?;
 
     // Transaction generation and sending
-    for i in 0..opt.tx_count {
-        info!("Transaction #{}", i + 1);
-        generate_and_send_transaction(&tx_manager)
-            .await
-            .map_err(Report::msg)?;
-        // sleep(Duration::from_millis(2500)).await;
-    }
+    let transactions = wallets
+        .iter()
+        .map(|w| {
+            let tx_manager = TransactionManager::new(provider.clone(), &w);
+            send_continuous_transactions(tx_manager.clone(), tx_count)
+        })
+        .collect::<Vec<_>>();
 
-    Ok(())
-}
-
-// Assuming this function signature
-async fn generate_and_send_transaction(tx_manager: &TransactionManager) -> Result<(), Report> {
-    // Generate a new wallet for the recipient
-    let recipient_wallet = Wallet::new(&mut rand::thread_rng());
-    let to = recipient_wallet.address();
-
-    // Define the transaction
-    let tx = TransactionRequest::new()
-        .to(to)
-        .value(1e8 as u64)
-        .from(tx_manager.get_address());
-
-    tx_manager.handle_transaction(tx).await?;
-
+    let _results = join_all(transactions).await;
     Ok(())
 }

@@ -15,7 +15,6 @@ pub struct TransactionManager {
 }
 
 impl TransactionManager {
-    // Create a new TransactionManager
     pub fn new(provider: Arc<Provider<Http>>, wallet: &LocalWallet) -> Self {
         let client = Arc::new(SignerMiddleware::new(provider, wallet.clone()));
         TransactionManager {
