@@ -1,59 +1,50 @@
 # EVM Transaction Generator
 
-EVM Transaction Generator is a Rust-based command-line application that automates the process of generating and sending transactions to an Ethereum Virtual Machine (EVM) compatible blockchain.
+## Description
+
+This Rust application is designed to generate and send a specified number of transactions across the Ethereum Virtual Machine (EVM). It supports multiple accounts to distribute transactions and is configurable via environment variables and command-line arguments.
 
 ## Features
 
-- Generate a specified number of transactions.
-- Automatically handle Ethereum wallet creation and transaction signing.
-- Configurable via command-line arguments.
-- Error handling with detailed logging.
-
-## Requirements
-
-- Rust Programming Language
-- Ethereum node accessible via an HTTP endpoint
+- Generate a specified number of EVM transactions.
+- Support for multiple accounts to distribute the transaction load.
+- Environment variable and command-line configuration.
+- Integration with contract calls for funding and transaction load testing.
+- Transaction management with automatic retries and error handling.
 
 ## Installation
 
-Clone the repository and build the project:
+Before you begin, ensure that Rust is installed on your system. You can install Rust through [rustup](https://rustup.rs/).
 
-```bash
-git clone https://github.com/jfrank-summit/evm-tx.git
-cd evm-tx-generator
-cargo build --release
-```
+1. Clone the repository:
+
+   ```bash
+   git clone https://github.com/your-username/evm-transaction-generator.git
+   cd evm-transaction-generator
+   ```
+
+2. Build the project:
+
+   ```bash
+   cargo build --release
+   ```
 
 ## Usage
 
-Run the program with the following command:
+Before running the application, set the necessary environment variables in a `.env` file or export them directly in your shell:
 
-```bash
-cargo run -- -n <NODE_URL> -t <TX_COUNT> -k <PRIVATE_KEY>
+```env
+FUNDER_PRIVATE_KEY=your_funder_private_key
+FUNDING_CONTRACT_ADDRESS=your_funding_contract_address
+LOAD_CONTRACT_ADDRESS=your_load_contract_address
+RPC_URL=your_rpc_url
 ```
 
-- `-n`, `--node_url`: URL of the Ethereum node.
-- `-t`, `--tx_count`: Number of transactions to generate.
-- `-k`, `--private_key`: Private key for the Ethereum wallet.
-
-## Logging
-
-Logging is set up to provide insights into the application's process and errors. By default, the log level is set to `Info`. To change the log level, set the `RUST_LOG` environment variable.
-
-## Example
+Run the application with the following command:
 
 ```bash
-RUST_LOG=debug cargo run -- -n 'https://ethereum-node-url.com' -t 10 -k 'your-private-key'
+cargo run --release -- -t <tx_count> -a <num_accounts>
 ```
 
-## Contribution
-
-Contributions are welcome. Please feel free to submit pull requests or open issues.
-
-## License
-
-[Your chosen license]
-
-## Disclaimer
-
-This tool is for educational and development purposes only. Do not use it on mainnet with real funds without thorough testing and understanding of the risks.
+- `-t, --tx_count <tx_count>`: The number of transactions to generate.
+- `-a, --num_accounts <num_accounts>`: The number of accounts to use for generating transactions.
