@@ -2,7 +2,7 @@ use ethers::abi::{Abi, Tokenizable};
 use ethers::prelude::*;
 use ethers::types::NameOrAddress;
 use eyre::Result;
-use log::{debug, info};
+use log::info;
 use serde_json::from_str;
 
 pub(crate) async fn bulk_transfer_transaction(
@@ -10,7 +10,7 @@ pub(crate) async fn bulk_transfer_transaction(
     funding_amount: U256,
     fund_contract_address: H160,
 ) -> Result<TransactionRequest> {
-    let abi = include_str!("./abi/Fund.sol/Fund.json");
+    let abi = include_str!("./abi/Fund.json");
     let contract_abi: Abi = from_str(abi)?;
     let function = contract_abi.function("transferTsscToMany")?;
     let args = to_addresses.clone().into_token();
@@ -24,13 +24,18 @@ pub(crate) async fn bulk_transfer_transaction(
         value
     );
 
-    debug!("call data: {:?}", calldata);
     let tx_req = TransactionRequest {
         to: Some(NameOrAddress::Address(fund_contract_address)),
         value,
         data: Some(calldata.into()),
         ..Default::default()
     };
-    debug!("tx_req: {:?}", tx_req);
+
     Ok(tx_req)
 }
+
+// pub(crate) async fn heavy_call() -> Result<TransactionRequest> {
+//     let abi = include_str!("./abi/Load.json");
+//     let contract_abi: Abi = from_str(abi)?;
+//     let function = contract_abi.function("set_array")?;
+// }

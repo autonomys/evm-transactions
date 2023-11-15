@@ -1,11 +1,11 @@
-mod fund_addresses;
+mod contract_calls;
 mod generate_transactions;
 mod transaction_manager;
 
+use contract_calls::bulk_transfer_transaction;
 use env_logger::Builder;
 use ethers::prelude::*;
 use eyre::{Report, Result};
-use fund_addresses::bulk_transfer_transaction;
 use futures::future::join_all;
 use generate_transactions::send_continuous_transactions;
 use log::LevelFilter;
@@ -14,7 +14,7 @@ use std::sync::Arc;
 use structopt::StructOpt;
 use transaction_manager::TransactionManager;
 
-const CHAIN_ID: u64 = 1002u64;
+pub const CHAIN_ID: u64 = 1002u64;
 // Define a struct to hold the command-line arguments
 #[derive(StructOpt, Debug)]
 #[structopt(name = "EVM Transaction Generator")]
@@ -24,25 +24,25 @@ struct Opt {
     tx_count: usize,
 
     // The number of accounts to use to generate transactions
-    #[structopt(short = "a", long)]
+    #[structopt(short, long)]
     num_accounts: usize,
 }
 
 struct EnvVars {
-    private_key: String,
+    funder_private_key: String,
     fund_contract_address: Address,
     rpc_url: String,
 }
 impl EnvVars {
     fn get_env_vars() -> eyre::Result<EnvVars> {
-        let private_key = env::var("PRIVATE_KEY").expect("PRIVATE_KEY must be set");
-        let fund_contract_address: Address = env::var("FUND_CONTRACT_ADDRESS")
+        let funder_private_key = env::var("FUNDER_PRIVATE_KEY").expect("PRIVATE_KEY must be set");
+        let fund_contract_address: Address = env::var("FUNDING_CONTRACT_ADDRESS")
             .expect("FUND_CONTRACT_ADDRESS must be set")
             .parse()?;
         let rpc_url = env::var("RPC_URL").expect("RPC_URL must be set");
         {
             Ok(EnvVars {
-                private_key,
+                funder_private_key,
                 fund_contract_address,
                 rpc_url,
             })
@@ -64,7 +64,7 @@ async fn main() -> Result<(), Report> {
 
     dotenv::from_path(".env")?;
     let EnvVars {
-        private_key,
+        funder_private_key,
         fund_contract_address,
         rpc_url,
     } = EnvVars::get_env_vars()?;
@@ -76,7 +76,7 @@ async fn main() -> Result<(), Report> {
     } = Opt::from_args();
 
     let provider = Arc::new(Provider::<Http>::try_from(rpc_url).map_err(Report::msg)?);
-    let funder_wallet: LocalWallet = private_key.parse()?;
+    let funder_wallet: LocalWallet = funder_private_key.parse()?;
     let funder_wallet = funder_wallet.clone().with_chain_id(CHAIN_ID);
     let funder_tx_manager = TransactionManager::new(provider.clone(), &funder_wallet);
 
