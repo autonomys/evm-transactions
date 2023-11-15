@@ -16,15 +16,13 @@ pub async fn send_continuous_transactions(
     num_transactions: usize,
     transaction_type: &TransactionType,
 ) -> Result<()> {
-    let mut futures = Vec::with_capacity(num_transactions);
-
     for i in 0..num_transactions {
         info!(
             "Transaction #{} for wallet {}",
             i + 1,
             transaction_manager.get_address()
         );
-        let tx_future = match transaction_type {
+        let _ = match transaction_type {
             TransactionType::Transfer => generate_and_send_transfer(&transaction_manager).await,
             TransactionType::SetArray {
                 contract_address,
@@ -38,7 +36,6 @@ pub async fn send_continuous_transactions(
                 .await
             }
         };
-        futures.push(Box::pin(tx_future));
     }
 
     Ok(())
