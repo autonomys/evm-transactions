@@ -48,3 +48,6 @@ cargo run --release -- -t <tx_count> -a <num_accounts>
 
 - `-t, --tx_count <tx_count>`: The number of transactions to generate.
 - `-a, --num_accounts <num_accounts>`: The number of accounts to use for generating transactions.
+- `-f, --funding_amount_tssc <funding_amount_tssc>`: The amount of TSSC to fund the accounts with.
+- `-set_array_acounts <set_array_acounts>`: This larger this value, the more each transaction will cost. Reasonable values are 1-1000.
+- `-h, --help`: Prints help information.

@@ -19,13 +19,21 @@ pub const CHAIN_ID: u64 = 1002u64;
 #[derive(StructOpt, Debug)]
 #[structopt(name = "EVM Transaction Generator")]
 struct Opt {
+    // The number of accounts to use to generate transactions
+    #[structopt(short, long)]
+    num_accounts: usize,
+
     // The number of transactions to generate
     #[structopt(short, long)]
     tx_count: usize,
 
-    // The number of accounts to use to generate transactions
+    // The amount of funding to send to each account
     #[structopt(short, long)]
-    num_accounts: usize,
+    funding_amount_tssc: f64,
+
+    // measurement of how heavy a transaction should be, values between 1-2000 are appropriate
+    #[structopt(short, long)]
+    set_array_count: u64,
 }
 
 struct EnvVars {
@@ -79,6 +87,8 @@ async fn main() -> Result<(), Report> {
     let Opt {
         tx_count,
         num_accounts,
+        funding_amount_tssc,
+        set_array_count,
     } = Opt::from_args();
 
     let provider = Arc::new(Provider::<Http>::try_from(rpc_url).map_err(Report::msg)?);
@@ -90,18 +100,14 @@ async fn main() -> Result<(), Report> {
         .map(|_| Wallet::new(&mut rand::thread_rng()).with_chain_id(CHAIN_ID))
         .collect::<Vec<_>>();
     let addresses = wallets.iter().map(|w| w.address()).collect::<Vec<_>>();
-
-    let tx = bulk_transfer_transaction(
-        addresses,
-        (100_000_000_000_000_000 as u128).into(),
-        fund_contract_address,
-    )?;
+    let funding_amount = (funding_amount_tssc * 1e18) as u128;
+    let tx = bulk_transfer_transaction(addresses, funding_amount.into(), fund_contract_address)?;
 
     funder_tx_manager.handle_transaction(tx).await?;
 
     let transaction_type = TransactionType::SetArray {
         contract_address: load_contract_address,
-        count: 100.into(),
+        count: set_array_count.into(),
     };
     // Transaction generation and sending
     let transactions = wallets

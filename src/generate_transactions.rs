@@ -18,7 +18,7 @@ pub async fn send_continuous_transactions(
 ) -> Result<()> {
     for i in 0..num_transactions {
         info!(
-            "Transaction #{} for wallet {}",
+            "Transaction #{} for wallet {:?}",
             i + 1,
             transaction_manager.get_address()
         );
