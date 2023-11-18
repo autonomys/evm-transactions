@@ -25,13 +25,45 @@ impl TransactionManager {
 
     pub async fn handle_transaction(&self, transaction: TransactionRequest) -> Result<(), Report> {
         let mut attempts = 0;
+        let mut adjust_nonce = false;
 
         while attempts < MAX_RETRIES {
+            let transaction = if adjust_nonce {
+                let num_transactions = self
+                    .client
+                    .get_transaction_count(self.get_address(), None)
+                    .await?;
+                let new_nonce = num_transactions + attempts - 2; // testing if nonce got skipped due to reorg
+                info!(
+                    "Attempt #{:?} Will retry with nonce {:?} for wallet {:?}. Chain nonce: {:?}",
+                    attempts,
+                    &new_nonce,
+                    self.get_address(),
+                    num_transactions
+                );
+                transaction.clone().nonce(new_nonce)
+            } else {
+                transaction.clone()
+            };
+
             match self.try_send_transaction(&transaction).await {
                 Ok(()) => return Ok(()),
-                Err(e) if attempts < MAX_RETRIES - 1 => {
-                    error!("Error sending transaction, retrying...: {:?}", e);
-                    sleep(RETRY_DELAY).await;
+                Err(e) if attempts < MAX_RETRIES => {
+                    if e.to_string().contains("already known") {
+                        info!(
+                            "Transaction {:?} already known, retrying with new nonce {:?}",
+                            transaction, transaction.nonce
+                        );
+                        adjust_nonce = true;
+                    };
+                    error!(
+                        "Error sending transaction, retry #{:?} from wallet {:?}: {:?}",
+                        attempts + 1,
+                        self.get_address(),
+                        e,
+                    );
+                    sleep(RETRY_DELAY * (attempts + 1)).await;
+
                     attempts += 1;
                 }
                 Err(e) => {
@@ -51,13 +83,14 @@ impl TransactionManager {
             .await
         {
             Ok(pending_tx) => {
+                let tx_hash = pending_tx.tx_hash();
                 info!(
-                    "Transaction {:?} sent with {:?} nonce. Waiting for confirmation...",
-                    *pending_tx, transaction.nonce
+                    "Transaction {:?} sent with {:?} nonce from wallet {:?}. Waiting for confirmation...",
+                    tx_hash, transaction.nonce, self.get_address()
                 );
 
                 let _receipt = pending_tx.confirmations(1).await;
-                info!("Transaction confirmed");
+                info!("Transaction {:?} confirmed", tx_hash);
             }
             Err(e) => {
                 error!("Error sending transaction: {:?}", e);
