@@ -2,9 +2,12 @@ use crate::{contract_calls::set_array_transaction, transaction_manager::Transact
 use ethers::prelude::*;
 use eyre::Result;
 use log::info;
+use std::sync::Arc;
 
 pub enum TransactionType {
-    Transfer,
+    Transfer {
+        hierarchical_tx_depth: u64,
+    },
     SetArray {
         contract_address: Address,
         count: U256,
@@ -12,6 +15,7 @@ pub enum TransactionType {
 }
 
 pub async fn send_continuous_transactions(
+    provider: Arc<Provider<Http>>,
     transaction_manager: TransactionManager,
     num_transactions: usize,
     transaction_type: &TransactionType,
@@ -23,7 +27,16 @@ pub async fn send_continuous_transactions(
             transaction_manager.get_address()
         );
         let _ = match transaction_type {
-            TransactionType::Transfer => generate_and_send_transfer(&transaction_manager).await,
+            TransactionType::Transfer {
+                hierarchical_tx_depth,
+            } => {
+                generate_and_send_transfer(
+                    provider.clone(),
+                    transaction_manager.clone(),
+                    *hierarchical_tx_depth,
+                )
+                .await
+            }
             TransactionType::SetArray {
                 contract_address,
                 count,
@@ -41,18 +54,27 @@ pub async fn send_continuous_transactions(
     Ok(())
 }
 
-async fn generate_and_send_transfer(tx_manager: &TransactionManager) -> Result<()> {
-    // Generate a new wallet for the recipient
-    let recipient_wallet = Wallet::new(&mut rand::thread_rng());
-    let to = recipient_wallet.address();
+async fn generate_and_send_transfer(
+    provider: Arc<Provider<Http>>,
+    mut tx_manager: TransactionManager,
+    level: u64,
+) -> Result<()> {
+    for i in (1..=level).rev() {
+        // Generate a new wallet for the recipient
+        let recipient_wallet = Wallet::new(&mut rand::thread_rng());
+        let to = recipient_wallet.address();
 
-    // Define the transfer
-    let tx = TransactionRequest::new()
-        .to(to)
-        .value(1e6 as u64)
-        .from(tx_manager.get_address());
+        // Transfer `total - 1e12` to the recipient and leave 1e12 as tx fee
+        let tx = TransactionRequest::new()
+            .to(to)
+            .value(1e12 as u64 * i)
+            .from(tx_manager.get_address());
 
-    tx_manager.handle_transaction(tx).await?;
+        tx_manager.handle_transaction(tx).await?;
+
+        // Use the `recipient_wallet` as the next sender
+        tx_manager = TransactionManager::new(provider.clone(), &recipient_wallet);
+    }
 
     Ok(())
 }

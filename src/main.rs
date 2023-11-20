@@ -34,6 +34,10 @@ struct Opt {
     // measurement of how heavy a transaction should be, values between 1-2000 are appropriate
     #[structopt(short, long)]
     set_array_count: u64,
+
+    // The depht of hierarchical tx (i.e. A -> B, B -> C, C -> ..., etc.)
+    #[structopt(short, long, default_value = "1")]
+    hierarchical_tx_depth: u64,
 }
 
 struct EnvVars {
@@ -89,6 +93,7 @@ async fn main() -> Result<(), Report> {
         num_accounts,
         funding_amount_tssc,
         set_array_count,
+        hierarchical_tx_depth,
     } = Opt::from_args();
 
     let provider = Arc::new(Provider::<Http>::try_from(rpc_url).map_err(Report::msg)?);
@@ -105,16 +110,25 @@ async fn main() -> Result<(), Report> {
 
     funder_tx_manager.handle_transaction(tx).await?;
 
-    let transaction_type = TransactionType::SetArray {
-        contract_address: load_contract_address,
-        count: set_array_count.into(),
+    let transaction_type = TransactionType::Transfer {
+        hierarchical_tx_depth,
     };
+    // let transaction_type = TransactionType::SetArray {
+    //     contract_address: load_contract_address,
+    //     count: set_array_count.into(),
+    // };
+
     // Transaction generation and sending
     let transactions = wallets
         .iter()
         .map(|w| {
             let tx_manager = TransactionManager::new(provider.clone(), &w);
-            send_continuous_transactions(tx_manager.clone(), tx_count, &transaction_type)
+            send_continuous_transactions(
+                provider.clone(),
+                tx_manager.clone(),
+                tx_count,
+                &transaction_type,
+            )
         })
         .collect::<Vec<_>>();
 
