@@ -10,7 +10,7 @@ const RETRY_DELAY: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Clone)]
 pub struct TransactionManager {
-    client: Arc<SignerMiddleware<Arc<Provider<Http>>, LocalWallet>>,
+    pub client: Arc<SignerMiddleware<Arc<Provider<Http>>, LocalWallet>>,
     pub wallet: LocalWallet,
 }
 

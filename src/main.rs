@@ -100,8 +100,8 @@ async fn main() -> Result<(), Report> {
         .map(|_| Wallet::new(&mut rand::thread_rng()).with_chain_id(CHAIN_ID))
         .collect::<Vec<_>>();
     let addresses = wallets.iter().map(|w| w.address()).collect::<Vec<_>>();
-    let funding_amount = (funding_amount_tssc * 1e18) as u128;
-    let tx = bulk_transfer_transaction(addresses, funding_amount.into(), fund_contract_address)?;
+    let funding_amount: U256 = ((funding_amount_tssc * 1e18) as u128).into();
+    let tx = bulk_transfer_transaction(addresses, funding_amount, fund_contract_address)?;
 
     funder_tx_manager.handle_transaction(tx).await?;
 
@@ -114,7 +114,8 @@ async fn main() -> Result<(), Report> {
         .iter()
         .map(|w| {
             let tx_manager = TransactionManager::new(provider.clone(), &w);
-            send_continuous_transactions(tx_manager.clone(), tx_count, &transaction_type)
+            chain_of_transfers(tx_manager, tx_count, funding_amount)
+            //send_continuous_transactions(tx_manager.clone(), tx_count, &transaction_type)
         })
         .collect::<Vec<_>>();
 
