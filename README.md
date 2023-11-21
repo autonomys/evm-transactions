@@ -1,4 +1,4 @@
-# EVM Transaction Generator
+-# EVM Transaction Generator
 
 ## Description
 
@@ -43,11 +43,10 @@ RPC_URL=your_rpc_url
 Run the application with the following command:
 
 ```bash
-cargo run --release -- -t <tx_count> -a <num_accounts>
+cargo run --release -- -t <tx_count> -n <num_accounts> -f <funding_amount_tssc> -s <set_array_count>
 ```
 
 - `-t, --tx_count <tx_count>`: The number of transactions to generate.
 - `-a, --num_accounts <num_accounts>`: The number of accounts to use for generating transactions.
 - `-f, --funding_amount_tssc <funding_amount_tssc>`: The amount of TSSC to fund the accounts with.
-- `-set_array_acounts <set_array_acounts>`: This larger this value, the more each transaction will cost. Reasonable values are 1-1000.
-- `-h, --help`: Prints help information.
+- `-s, --set_array_acounts <set_array_count>`: This larger this value, the more each transaction will cost. Reasonable values are 1-1000.
