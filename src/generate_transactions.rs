@@ -2,6 +2,7 @@ use crate::{contract_calls::set_array_transaction, transaction_manager::Transact
 use ethers::prelude::*;
 use eyre::Result;
 use log::info;
+use rand::{thread_rng, Rng};
 
 pub enum TransactionType {
     Transfer,
@@ -62,6 +63,8 @@ async fn generate_and_send_set_array(
     load_contract_address: Address,
     count: U256,
 ) -> Result<()> {
+    let random_value: U256 = thread_rng().gen_range(1..150).into();
+    let count = count.checked_add(random_value).unwrap_or(count);
     let tx = set_array_transaction(load_contract_address, count)?;
     tx_manager.handle_transaction(tx).await?;
 

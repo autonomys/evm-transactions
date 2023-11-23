@@ -44,6 +44,7 @@ pub(crate) fn set_array_transaction(
     let function = contract_abi.function("setArray")?;
     let args = count.into_token();
     let calldata = function.encode_input(&[args])?;
+    info!("Setting array with value: {:?}", count);
 
     let tx_req = TransactionRequest {
         to: Some(NameOrAddress::Address(load_contract_address)),
