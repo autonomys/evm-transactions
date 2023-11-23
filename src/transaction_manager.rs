@@ -33,7 +33,9 @@ impl TransactionManager {
                     .client
                     .get_transaction_count(self.get_address(), None)
                     .await?;
-                let new_nonce = num_transactions + attempts - 2; // testing if nonce got skipped due to reorg
+                let new_nonce = num_transactions
+                    .checked_add((attempts.checked_sub(2).unwrap_or_default()).into())
+                    .unwrap_or_default(); // testing if nonce got skipped due to reorg
                 info!(
                     "Attempt #{:?} Will retry with nonce {:?} for wallet {:?}. Chain nonce: {:?}",
                     attempts,
@@ -89,8 +91,12 @@ impl TransactionManager {
                     tx_hash, transaction.nonce, self.get_address()
                 );
 
-                let _receipt = pending_tx.confirmations(1).await;
-                info!("Transaction {:?} confirmed", tx_hash);
+                let receipt = pending_tx.confirmations(3).await?.unwrap_or_default();
+
+                info!(
+                    "Transaction {:?} confirmed. Block #{:?} ({:?})",
+                    tx_hash, receipt.block_number, receipt.block_hash
+                );
             }
             Err(e) => {
                 error!("Error sending transaction: {:?}", e);

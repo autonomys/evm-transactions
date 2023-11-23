@@ -1,6 +1,7 @@
 use ethers::abi::{Abi, Tokenizable};
 use ethers::prelude::*;
 use ethers::types::NameOrAddress;
+use ethers::utils::format_units;
 use eyre::Result;
 use log::info;
 use serde_json::from_str;
@@ -20,8 +21,8 @@ pub(crate) fn bulk_transfer_transaction(
     info!(
         "funding {:?} wallets with amount: {:?}. Total cost: {:?}",
         to_addresses.len(),
-        funding_amount,
-        value
+        format_units(funding_amount, 18),
+        format_units(value.unwrap_or_default(), 18)
     );
 
     let tx_req = TransactionRequest {
