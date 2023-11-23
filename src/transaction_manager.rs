@@ -5,7 +5,7 @@ use std::{sync::Arc, time::Duration};
 use tokio::time::sleep;
 
 // Constants for retry strategy
-const MAX_RETRIES: u32 = 5;
+const MAX_RETRIES: u32 = 2;
 const RETRY_DELAY: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Clone)]
@@ -29,19 +29,19 @@ impl TransactionManager {
 
         while attempts < MAX_RETRIES {
             let transaction = if adjust_nonce {
-                let num_transactions = self
+                let new_nonce = self
                     .client
                     .get_transaction_count(self.get_address(), None)
                     .await?;
-                let new_nonce = num_transactions
-                    .checked_add((attempts.checked_sub(2).unwrap_or_default()).into())
-                    .unwrap_or_default(); // testing if nonce got skipped due to reorg
+                // let new_nonce = num_transactions
+                //     .checked_add((attempts.checked_sub(2).unwrap_or_default()).into())
+                //     .unwrap_or_default(); // testing if nonce got skipped due to reorg
                 info!(
                     "Attempt #{:?} Will retry with nonce {:?} for wallet {:?}. Chain nonce: {:?}",
                     attempts,
                     &new_nonce,
                     self.get_address(),
-                    num_transactions
+                    &new_nonce
                 );
                 transaction.clone().nonce(new_nonce)
             } else {
