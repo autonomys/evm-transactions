@@ -12,14 +12,20 @@ const RETRY_DELAY: Duration = Duration::from_secs(5);
 pub struct TransactionManager {
     client: Arc<SignerMiddleware<Arc<Provider<Http>>, LocalWallet>>,
     pub wallet: LocalWallet,
+    num_confirmations: usize,
 }
 
 impl TransactionManager {
-    pub fn new(provider: Arc<Provider<Http>>, wallet: &LocalWallet) -> Self {
+    pub fn new(
+        provider: Arc<Provider<Http>>,
+        wallet: &LocalWallet,
+        num_confirmations: usize,
+    ) -> Self {
         let client = Arc::new(SignerMiddleware::new(provider, wallet.clone()));
         TransactionManager {
             client,
             wallet: wallet.clone(),
+            num_confirmations,
         }
     }
 
@@ -91,7 +97,10 @@ impl TransactionManager {
                     tx_hash, transaction.nonce, self.get_address()
                 );
 
-                let receipt = pending_tx.confirmations(3).await?.unwrap_or_default();
+                let receipt = pending_tx
+                    .confirmations(self.num_confirmations)
+                    .await?
+                    .unwrap_or_default();
 
                 info!(
                     "Transaction {:?} confirmed. Block #{:?} ({:?})",
