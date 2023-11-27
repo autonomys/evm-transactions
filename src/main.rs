@@ -46,6 +46,11 @@ enum TransactionType {
     },
     /// Generate chain of transfer transaction, i.e. A->B, B->C, ..
     ChainTransfer,
+    /// Generate circle of transfer transaction, i.e. A->B, B->C, C->A
+    CircleTransfer {
+        /// Interval between transactions
+        interval_second: usize,
+    },
 }
 
 struct EnvVars {
@@ -151,6 +156,16 @@ async fn main() -> Result<(), Report> {
                 .collect::<Vec<_>>();
 
             try_join_all(transactions).await?;
+        }
+        TransactionType::CircleTransfer { interval_second } => {
+            circle_of_transfers(
+                funder_tx_manager,
+                acc_tx_mgrs,
+                funding_amount,
+                interval_second,
+                tx_count,
+            )
+            .await?;
         }
     }
 

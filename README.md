@@ -53,3 +53,4 @@ cargo run --release -- -t <tx-count> -n <num-accounts> -f <funding-amount-tssc> 
 `<SUBCOMMAND>`: different types of transaction that can be generated:
 - `set-array`: Generate transaction with given weight/size
 - `chain-transfer`: Generate chain of transfer transaction, i.e. A->B, B->C, ..
+- `circle-transfer`: Generate circle of transfer transaction, i.e. A->B, B->C, C->A
