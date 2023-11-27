@@ -43,10 +43,13 @@ RPC_URL=your_rpc_url
 Run the application with the following command:
 
 ```bash
-cargo run --release -- -t <tx_count> -n <num_accounts> -f <funding_amount_tssc> -s <set_array_count>
+cargo run --release -- -t <tx-count> -n <num-accounts> -f <funding-amount-tssc> -s <set_array_count> <SUBCOMMAND>
 ```
 
 - `-t, --tx_count <tx_count>`: The number of transactions to generate.
-- `-a, --num_accounts <num_accounts>`: The number of accounts to use for generating transactions.
+- `-n, --num_accounts <num_accounts>`: The number of accounts to use for generating transactions.
 - `-f, --funding_amount_tssc <funding_amount_tssc>`: The amount of TSSC to fund the accounts with.
-- `-s, --set_array_acounts <set_array_count>`: This larger this value, the more each transaction will cost. Reasonable values are 1-1000.
+
+`<SUBCOMMAND>`: different types of transaction that can be generated:
+- `set-array`: Generate transaction with given weight/size
+- `chain-transfer`: Generate chain of transfer transaction, i.e. A->B, B->C, ..
