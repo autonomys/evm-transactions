@@ -1,3 +1,5 @@
+#![feature(iter_map_windows)]
+
 mod contract_calls;
 mod generate_transactions;
 mod transaction_manager;
@@ -6,7 +8,7 @@ use contract_calls::*;
 use env_logger::Builder;
 use ethers::prelude::*;
 use eyre::{Report, Result};
-use futures::future::join_all;
+use futures::future::try_join_all;
 use generate_transactions::*;
 use log::LevelFilter;
 use std::env;
@@ -23,17 +25,32 @@ struct Opt {
     #[structopt(short, long)]
     num_accounts: usize,
 
-    // The number of transactions to generate
-    #[structopt(short, long)]
-    tx_count: usize,
-
     // The amount of funding to send to each account
     #[structopt(short, long)]
     funding_amount_tssc: f64,
 
-    // measurement of how heavy a transaction should be, values between 1-2000 are appropriate
+    // The number of transactions to generate
     #[structopt(short, long)]
-    set_array_count: u64,
+    tx_count: usize,
+
+    #[structopt(subcommand)]
+    tx_type: TransactionType,
+}
+
+#[derive(StructOpt, Debug)]
+enum TransactionType {
+    /// Generate transaction with given weight/size
+    SetArray {
+        /// Measurement of how heavy a transaction should be, values between 1-2000 are appropriate
+        set_array_count: U256,
+    },
+    /// Generate chain of transfer transaction, i.e. A->B, B->C, ..
+    ChainTransfer,
+    /// Generate circle of transfer transaction, i.e. A->B, B->C, C->A
+    CircleTransfer {
+        /// Interval between transactions
+        interval_second: usize,
+    },
 }
 
 struct EnvVars {
@@ -85,40 +102,72 @@ async fn main() -> Result<(), Report> {
 
     // Parse command-line arguments
     let Opt {
-        tx_count,
         num_accounts,
         funding_amount_tssc,
-        set_array_count,
+        tx_count,
+        tx_type,
     } = Opt::from_args();
 
     let provider = Arc::new(Provider::<Http>::try_from(rpc_url).map_err(Report::msg)?);
-    let funder_wallet: LocalWallet = funder_private_key.parse()?;
-    let funder_wallet = funder_wallet.clone().with_chain_id(CHAIN_ID);
-    let funder_tx_manager = TransactionManager::new(provider.clone(), &funder_wallet);
-
-    let wallets = (0..num_accounts)
-        .map(|_| Wallet::new(&mut rand::thread_rng()).with_chain_id(CHAIN_ID))
-        .collect::<Vec<_>>();
-    let addresses = wallets.iter().map(|w| w.address()).collect::<Vec<_>>();
-    let funding_amount: U256 = ((funding_amount_tssc * 1e18) as u128).into();
-    let tx = bulk_transfer_transaction(addresses, funding_amount, fund_contract_address)?;
-
-    funder_tx_manager.handle_transaction(tx).await?;
-
-    let transaction_type = TransactionType::SetArray {
-        contract_address: load_contract_address,
-        count: set_array_count.into(),
+    let funder_tx_manager = {
+        let funder_wallet = funder_private_key
+            .parse::<LocalWallet>()?
+            .with_chain_id(CHAIN_ID);
+        TransactionManager::new(provider.clone(), &funder_wallet)
     };
-    // Transaction generation and sending
-    let transactions = wallets
-        .iter()
-        .map(|w| {
-            let tx_manager = TransactionManager::new(provider.clone(), &w);
-            chain_of_transfers(tx_manager, tx_count, funding_amount)
-            //send_continuous_transactions(tx_manager.clone(), tx_count, &transaction_type)
-        })
+    let funding_amount: U256 = ((funding_amount_tssc * 1e18) as u128).into();
+    let acc_tx_mgrs = (0..num_accounts)
+        .map(|_| Wallet::new(&mut rand::thread_rng()).with_chain_id(CHAIN_ID))
+        .map(|w| TransactionManager::new(provider.clone(), &w))
         .collect::<Vec<_>>();
 
-    let _results = join_all(transactions).await;
+    // Initial fund for accounts
+    let initial_fund_tx = {
+        let addresses = acc_tx_mgrs
+            .iter()
+            .map(|w| w.get_address())
+            .collect::<Vec<_>>();
+        bulk_transfer_transaction(addresses, funding_amount, fund_contract_address)?
+    };
+    funder_tx_manager
+        .handle_transaction(initial_fund_tx)
+        .await?;
+
+    match tx_type {
+        TransactionType::SetArray { set_array_count } => {
+            let transactions = acc_tx_mgrs
+                .into_iter()
+                .map(|tx_mgr| {
+                    generate_and_send_set_array(
+                        tx_mgr,
+                        tx_count,
+                        load_contract_address,
+                        set_array_count,
+                    )
+                })
+                .collect::<Vec<_>>();
+
+            try_join_all(transactions).await?;
+        }
+        TransactionType::ChainTransfer => {
+            let transactions = acc_tx_mgrs
+                .into_iter()
+                .map(|tx_mgr| chain_of_transfers(tx_mgr, tx_count, funding_amount))
+                .collect::<Vec<_>>();
+
+            try_join_all(transactions).await?;
+        }
+        TransactionType::CircleTransfer { interval_second } => {
+            circle_of_transfers(
+                funder_tx_manager,
+                acc_tx_mgrs,
+                funding_amount,
+                interval_second,
+                tx_count,
+            )
+            .await?;
+        }
+    }
+
     Ok(())
 }

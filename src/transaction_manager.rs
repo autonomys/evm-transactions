@@ -68,7 +68,7 @@ impl TransactionManager {
                 }
                 Err(e) => {
                     error!("Error sending transaction, giving up: {:?}", e);
-                    return Err(e.into());
+                    return Err(e);
                 }
             }
         }
