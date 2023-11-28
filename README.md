@@ -43,7 +43,7 @@ RPC_URL=your_rpc_url
 Run the application with the following command:
 
 ```bash
-cargo run --release -- -t <tx-count> -n <num-accounts> -f <funding-amount-tssc> -s <set_array_count> <SUBCOMMAND>
+cargo run --release -- -t <tx-count> -n <num-accounts> -f <funding-amount-tssc> <SUBCOMMAND>
 ```
 
 - `-t, --tx_count <tx_count>`: The number of transactions to generate.

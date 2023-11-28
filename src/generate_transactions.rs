@@ -61,7 +61,7 @@ pub async fn chain_of_transfers(
     let mut next_tx_manager = transaction_manager.clone();
 
     for i in 1..=num_transactions {
-        if transfer_amount <= (1e14 as u128).into() {
+        if transfer_amount <= gas.into() {
             info!("Insufficient funds for transaction #{}", i);
             break;
         }
