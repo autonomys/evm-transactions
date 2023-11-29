@@ -1,4 +1,4 @@
-use ethers::{prelude::*, types::transaction::eip2718::TypedTransaction};
+use ethers::prelude::*;
 use eyre::{Report, Result};
 use log::{debug, error, info};
 use std::{sync::Arc, time::Duration};
@@ -35,18 +35,15 @@ impl TransactionManager {
 
         while attempts < MAX_RETRIES {
             let transaction = if adjust_nonce {
-                let num_transactions = self
+                let new_nonce = self
                     .client
                     .get_transaction_count(self.get_address(), None)
                     .await?;
-                let new_nonce = num_transactions + attempts - 2; // testing if nonce got skipped due to reorg
                 info!(
-                    "Attempt #{:?} Will retry with nonce {:?} for wallet {:?}. Chain nonce: {:?}",
+                    "Attempt #{:?} Will retry with nonce {:?} for wallet {:?}.",
                     attempts,
                     &new_nonce,
                     self.get_address(),
-                    &new_nonce
-                    num_transactions
                 );
                 transaction.clone().nonce(new_nonce)
             } else {
@@ -63,14 +60,15 @@ impl TransactionManager {
                         );
                         adjust_nonce = true;
                     };
+
                     error!(
                         "Error sending transaction, retry #{:?} from wallet {:?}: {:?}",
                         attempts + 1,
                         self.get_address(),
                         e,
                     );
-                    sleep(RETRY_DELAY * (attempts + 1)).await;
 
+                    sleep(RETRY_DELAY * (attempts + 1)).await;
                     attempts += 1;
                 }
                 Err(e) => {
@@ -84,19 +82,7 @@ impl TransactionManager {
     }
 
     async fn try_send_transaction(&self, transaction: &TransactionRequest) -> Result<(), Report> {
-        let estimate_gas = self.estimate_gas(transaction.clone()).await?;
-        let increased_gas: U256 = estimate_gas
-            .checked_mul(110.into())
-            .unwrap_or_default()
-            .checked_div(100.into())
-            .unwrap_or_default();
-        info!(
-            "Estimated gas: {:?}, increased gas: {:?}",
-            estimate_gas, increased_gas
-        );
-        let transaction = transaction.clone().gas(increased_gas);
-
-        info!("Sending transaction {:?}", transaction);
+        debug!("Sending transaction {:?}", transaction);
         match self
             .client
             .send_transaction(transaction.clone(), None)
@@ -105,8 +91,9 @@ impl TransactionManager {
             Ok(pending_tx) => {
                 let tx_hash = pending_tx.tx_hash();
                 info!(
-                    "Transaction {:?} sent with {:?} nonce from wallet {:?}. Waiting for confirmation...",
-                    tx_hash, transaction.nonce, self.get_address()
+                    "Transaction {:?} sent from wallet {:?}. Waiting for confirmation...",
+                    tx_hash,
+                    self.get_address()
                 );
 
                 let receipt = pending_tx
@@ -130,12 +117,5 @@ impl TransactionManager {
 
     pub fn get_address(&self) -> Address {
         self.wallet.address()
-    }
-
-    pub async fn estimate_gas(&self, transaction: TransactionRequest) -> Result<U256, Report> {
-        Ok(self
-            .client
-            .estimate_gas(&TypedTransaction::Legacy(transaction.clone()), None)
-            .await?)
     }
 }

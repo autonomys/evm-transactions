@@ -124,7 +124,7 @@ async fn main() -> Result<(), Report> {
     let funding_amount: U256 = ((funding_amount_tssc * 1e18) as u128).into();
     let acc_tx_mgrs = (0..num_accounts)
         .map(|_| Wallet::new(&mut rand::thread_rng()).with_chain_id(CHAIN_ID))
-        .map(|w| TransactionManager::new(provider.clone(), &w))
+        .map(|w| TransactionManager::new(provider.clone(), &w, num_confirmations))
         .collect::<Vec<_>>();
 
     // Initial fund for accounts
@@ -158,7 +158,9 @@ async fn main() -> Result<(), Report> {
         TransactionType::ChainTransfer => {
             let transactions = acc_tx_mgrs
                 .into_iter()
-                .map(|tx_mgr| chain_of_transfers(tx_mgr, tx_count, funding_amount))
+                .map(|tx_mgr| {
+                    chain_of_transfers(tx_mgr, tx_count, funding_amount, num_confirmations)
+                })
                 .collect::<Vec<_>>();
 
             try_join_all(transactions).await?;

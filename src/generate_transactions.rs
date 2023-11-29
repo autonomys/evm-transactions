@@ -9,6 +9,7 @@ use std::time::Duration;
 pub async fn generate_and_send_transfer(
     tx_manager: &TransactionManager,
     transfer_amount: &U256,
+    num_confirmations: usize,
 ) -> Result<TransactionManager> {
     // Generate a new wallet for the recipient
     let recipient_wallet = Wallet::new(&mut rand::thread_rng()).with_chain_id(CHAIN_ID);
@@ -29,7 +30,8 @@ pub async fn generate_and_send_transfer(
     tx_manager.handle_transaction(tx).await?;
 
     let provider = Arc::new(tx_manager.client.provider().clone()); //.clone();
-    let recipient_tx_manager = TransactionManager::new(provider, &recipient_wallet);
+    let recipient_tx_manager =
+        TransactionManager::new(provider, &recipient_wallet, num_confirmations);
 
     Ok(recipient_tx_manager)
 }
@@ -61,6 +63,7 @@ pub async fn chain_of_transfers(
     transaction_manager: TransactionManager,
     num_transactions: usize,
     mut transfer_amount: U256,
+    num_confirmations: usize,
 ) -> Result<()> {
     let gas = 1.2e13 as u64;
     let mut next_tx_manager = transaction_manager.clone();
@@ -77,7 +80,9 @@ pub async fn chain_of_transfers(
         );
 
         transfer_amount -= gas.into();
-        next_tx_manager = generate_and_send_transfer(&next_tx_manager, &transfer_amount).await?;
+        next_tx_manager =
+            generate_and_send_transfer(&next_tx_manager, &transfer_amount, num_confirmations)
+                .await?;
     }
     Ok(())
 }
