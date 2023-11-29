@@ -1,6 +1,6 @@
-use ethers::prelude::*;
+use ethers::{prelude::*, types::transaction::eip2718::TypedTransaction};
 use eyre::{Report, Result};
-use log::{error, info};
+use log::{debug, error, info};
 use std::{sync::Arc, time::Duration};
 use tokio::time::sleep;
 
@@ -85,6 +85,19 @@ impl TransactionManager {
     }
 
     async fn try_send_transaction(&self, transaction: &TransactionRequest) -> Result<(), Report> {
+        let estimate_gas = self.estimate_gas(transaction.clone()).await?;
+        let increased_gas: U256 = estimate_gas
+            .checked_mul(110.into())
+            .unwrap_or_default()
+            .checked_div(100.into())
+            .unwrap_or_default();
+        info!(
+            "Estimated gas: {:?}, increased gas: {:?}",
+            estimate_gas, increased_gas
+        );
+        let transaction = transaction.clone().gas(increased_gas);
+
+        info!("Sending transaction {:?}", transaction);
         match self
             .client
             .send_transaction(transaction.clone(), None)
@@ -118,5 +131,12 @@ impl TransactionManager {
 
     pub fn get_address(&self) -> Address {
         self.wallet.address()
+    }
+
+    pub async fn estimate_gas(&self, transaction: TransactionRequest) -> Result<U256, Report> {
+        Ok(self
+            .client
+            .estimate_gas(&TypedTransaction::Legacy(transaction.clone()), None)
+            .await?)
     }
 }
