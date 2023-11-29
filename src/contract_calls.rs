@@ -1,6 +1,7 @@
 use ethers::abi::{Abi, Tokenizable};
 use ethers::prelude::*;
 use ethers::types::NameOrAddress;
+use ethers::utils::format_units;
 use eyre::Result;
 use log::info;
 use serde_json::from_str;
@@ -20,8 +21,8 @@ pub(crate) fn bulk_transfer_transaction(
     info!(
         "funding {:?} wallets with amount: {:?}. Total cost: {:?}",
         to_addresses.len(),
-        funding_amount,
-        value
+        format_units(funding_amount, 18),
+        format_units(value.unwrap_or_default(), 18)
     );
 
     let tx_req = TransactionRequest {
@@ -43,6 +44,7 @@ pub(crate) fn set_array_transaction(
     let function = contract_abi.function("setArray")?;
     let args = count.into_token();
     let calldata = function.encode_input(&[args])?;
+    info!("Setting array with value: {:?}", count);
 
     let tx_req = TransactionRequest {
         to: Some(NameOrAddress::Address(load_contract_address)),

@@ -1,4 +1,4 @@
--# EVM Transaction Generator
+# EVM Transaction Generator
 
 ## Description
 
@@ -38,6 +38,7 @@ FUNDER_PRIVATE_KEY=your_funder_private_key
 FUNDING_CONTRACT_ADDRESS=your_funding_contract_address
 LOAD_CONTRACT_ADDRESS=your_load_contract_address
 RPC_URL=your_rpc_url
+NUM_CONFIRMATIONS=your_num_confirmations (default: 3)
 ```
 
 Run the application with the following command:

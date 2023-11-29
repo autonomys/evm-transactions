@@ -58,6 +58,7 @@ struct EnvVars {
     fund_contract_address: Address,
     load_contract_address: Address,
     rpc_url: String,
+    num_confirmations: usize,
 }
 impl EnvVars {
     fn get_env_vars() -> eyre::Result<EnvVars> {
@@ -69,12 +70,16 @@ impl EnvVars {
             .expect("LOAD_CONTRACT_ADDRESS must be set")
             .parse()?;
         let rpc_url = env::var("RPC_URL").expect("RPC_URL must be set");
+        let num_confirmations: usize = env::var("NUM_CONFIRMATIONS")
+            .unwrap_or("3".to_owned())
+            .parse()?;
         {
             Ok(EnvVars {
                 funder_private_key,
                 fund_contract_address,
                 load_contract_address,
                 rpc_url,
+                num_confirmations,
             })
         }
     }
@@ -98,6 +103,7 @@ async fn main() -> Result<(), Report> {
         fund_contract_address,
         load_contract_address,
         rpc_url,
+        num_confirmations,
     } = EnvVars::get_env_vars()?;
 
     // Parse command-line arguments
@@ -113,12 +119,12 @@ async fn main() -> Result<(), Report> {
         let funder_wallet = funder_private_key
             .parse::<LocalWallet>()?
             .with_chain_id(CHAIN_ID);
-        TransactionManager::new(provider.clone(), &funder_wallet)
+        TransactionManager::new(provider.clone(), &funder_wallet, num_confirmations)
     };
     let funding_amount: U256 = ((funding_amount_tssc * 1e18) as u128).into();
     let acc_tx_mgrs = (0..num_accounts)
         .map(|_| Wallet::new(&mut rand::thread_rng()).with_chain_id(CHAIN_ID))
-        .map(|w| TransactionManager::new(provider.clone(), &w))
+        .map(|w| TransactionManager::new(provider.clone(), &w, num_confirmations))
         .collect::<Vec<_>>();
 
     // Initial fund for accounts
@@ -152,7 +158,9 @@ async fn main() -> Result<(), Report> {
         TransactionType::ChainTransfer => {
             let transactions = acc_tx_mgrs
                 .into_iter()
-                .map(|tx_mgr| chain_of_transfers(tx_mgr, tx_count, funding_amount))
+                .map(|tx_mgr| {
+                    chain_of_transfers(tx_mgr, tx_count, funding_amount, num_confirmations)
+                })
                 .collect::<Vec<_>>();
 
             try_join_all(transactions).await?;
