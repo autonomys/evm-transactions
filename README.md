@@ -1,4 +1,4 @@
-# EVM Transaction Generator
+-# EVM Transaction Generator
 
 ## Description
 
@@ -19,8 +19,8 @@ Before you begin, ensure that Rust is installed on your system. You can install 
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com/your-username/evm-transaction-generator.git
-   cd evm-transaction-generator
+   git clone https://github.com/jfrank-summit/evm-transactions.git
+   cd evm-transactions
    ```
 
 2. Build the project:
@@ -43,11 +43,14 @@ RPC_URL=your_rpc_url
 Run the application with the following command:
 
 ```bash
-cargo run --release -- -t <tx_count> -a <num_accounts>
+cargo run --release -- -t <tx-count> -n <num-accounts> -f <funding-amount-tssc> <SUBCOMMAND>
 ```
 
 - `-t, --tx_count <tx_count>`: The number of transactions to generate.
-- `-a, --num_accounts <num_accounts>`: The number of accounts to use for generating transactions.
+- `-n, --num_accounts <num_accounts>`: The number of accounts to use for generating transactions.
 - `-f, --funding_amount_tssc <funding_amount_tssc>`: The amount of TSSC to fund the accounts with.
-- `-set_array_acounts <set_array_acounts>`: This larger this value, the more each transaction will cost. Reasonable values are 1-1000.
-- `-h, --help`: Prints help information.
+
+`<SUBCOMMAND>`: different types of transaction that can be generated:
+- `set-array`: Generate transaction with given weight/size
+- `chain-transfer`: Generate chain of transfer transaction, i.e. A->B, B->C, ..
+- `circle-transfer`: Generate circle of transfer transaction, i.e. A->B, B->C, C->A

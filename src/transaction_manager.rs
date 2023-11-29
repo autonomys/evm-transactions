@@ -10,7 +10,7 @@ const RETRY_DELAY: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Clone)]
 pub struct TransactionManager {
-    client: Arc<SignerMiddleware<Arc<Provider<Http>>, LocalWallet>>,
+    pub client: Arc<SignerMiddleware<Arc<Provider<Http>>, LocalWallet>>,
     pub wallet: LocalWallet,
     num_confirmations: usize,
 }
@@ -35,19 +35,18 @@ impl TransactionManager {
 
         while attempts < MAX_RETRIES {
             let transaction = if adjust_nonce {
-                let new_nonce = self
+                let num_transactions = self
                     .client
                     .get_transaction_count(self.get_address(), None)
                     .await?;
-                // let new_nonce = num_transactions
-                //     .checked_add((attempts.checked_sub(2).unwrap_or_default()).into())
-                //     .unwrap_or_default(); // testing if nonce got skipped due to reorg
+                let new_nonce = num_transactions + attempts - 2; // testing if nonce got skipped due to reorg
                 info!(
                     "Attempt #{:?} Will retry with nonce {:?} for wallet {:?}. Chain nonce: {:?}",
                     attempts,
                     &new_nonce,
                     self.get_address(),
                     &new_nonce
+                    num_transactions
                 );
                 transaction.clone().nonce(new_nonce)
             } else {
@@ -76,7 +75,7 @@ impl TransactionManager {
                 }
                 Err(e) => {
                     error!("Error sending transaction, giving up: {:?}", e);
-                    return Err(e.into());
+                    return Err(e);
                 }
             }
         }
