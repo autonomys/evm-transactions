@@ -19,8 +19,8 @@ Before you begin, ensure that Rust is installed on your system. You can install 
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com/your-username/evm-transaction-generator.git
-   cd evm-transaction-generator
+   git clone https://github.com/jfrank-summit/evm-transactions.git
+   cd evm-transactions
    ```
 
 2. Build the project:
