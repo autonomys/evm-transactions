@@ -12,6 +12,7 @@ const RETRY_DELAY: Duration = Duration::from_secs(5);
 pub struct TransactionManager {
     pub client: Arc<SignerMiddleware<Arc<Provider<Http>>, LocalWallet>>,
     pub wallet: LocalWallet,
+    pub chain_id: u64,
     num_confirmations: usize,
 }
 
@@ -22,9 +23,12 @@ impl TransactionManager {
         num_confirmations: usize,
     ) -> Self {
         let client = Arc::new(SignerMiddleware::new(provider, wallet.clone()));
+        //TODO: This is a hack to get the chain_id from the wallet, will replace in the future
+        let chain_id = wallet.chain_id();
         TransactionManager {
             client,
             wallet: wallet.clone(),
+            chain_id,
             num_confirmations,
         }
     }

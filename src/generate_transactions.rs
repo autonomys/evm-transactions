@@ -1,4 +1,4 @@
-use crate::{contract_calls::*, transaction_manager::TransactionManager, CHAIN_ID};
+use crate::{contract_calls::*, transaction_manager::TransactionManager};
 use ethers::prelude::*;
 use eyre::Result;
 use log::info;
@@ -12,7 +12,7 @@ pub async fn generate_and_send_transfer(
     num_confirmations: usize,
 ) -> Result<TransactionManager> {
     // Generate a new wallet for the recipient
-    let recipient_wallet = Wallet::new(&mut rand::thread_rng()).with_chain_id(CHAIN_ID);
+    let recipient_wallet = Wallet::new(&mut rand::thread_rng()).with_chain_id(tx_manager.chain_id);
     let to = recipient_wallet.address();
 
     // Define the transfer

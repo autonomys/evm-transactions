@@ -16,7 +16,6 @@ use std::sync::Arc;
 use structopt::StructOpt;
 use transaction_manager::TransactionManager;
 
-pub const CHAIN_ID: u64 = 1002u64;
 // Define a struct to hold the command-line arguments
 #[derive(StructOpt, Debug)]
 #[structopt(name = "EVM Transaction Generator")]
@@ -115,15 +114,17 @@ async fn main() -> Result<(), Report> {
     } = Opt::from_args();
 
     let provider = Arc::new(Provider::<Http>::try_from(rpc_url).map_err(Report::msg)?);
+    let chain_id: u64 = provider.get_chainid().await?.as_u64();
+
     let funder_tx_manager = {
         let funder_wallet = funder_private_key
             .parse::<LocalWallet>()?
-            .with_chain_id(CHAIN_ID);
+            .with_chain_id(chain_id);
         TransactionManager::new(provider.clone(), &funder_wallet, num_confirmations)
     };
     let funding_amount: U256 = ((funding_amount_tssc * 1e18) as u128).into();
     let acc_tx_mgrs = (0..num_accounts)
-        .map(|_| Wallet::new(&mut rand::thread_rng()).with_chain_id(CHAIN_ID))
+        .map(|_| Wallet::new(&mut rand::thread_rng()).with_chain_id(chain_id))
         .map(|w| TransactionManager::new(provider.clone(), &w, num_confirmations))
         .collect::<Vec<_>>();
 
