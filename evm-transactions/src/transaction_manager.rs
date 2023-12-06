@@ -35,21 +35,20 @@ impl TransactionManager {
 
     pub async fn handle_transaction(&self, transaction: TransactionRequest) -> Result<(), Report> {
         let mut attempts = 0;
-        let mut adjust_nonce = false;
+        let mut adjust_gas_price = false;
 
         while attempts < MAX_RETRIES {
-            let transaction = if adjust_nonce {
-                let new_nonce = self
-                    .client
-                    .get_transaction_count(self.get_address(), None)
-                    .await?;
+            let transaction = if adjust_gas_price {
+                let gas_price = transaction.gas_price.unwrap_or_default();
+                let new_gas_price = gas_price.checked_add(100.into()).unwrap_or_default();
                 info!(
-                    "Attempt #{:?} Will retry with nonce {:?} for wallet {:?}.",
+                    "Attempt #{:?} Gas price was {:?}, will retry with gas price {:?} for wallet {:?}.",
                     attempts,
-                    &new_nonce,
+                    gas_price,
+                    &new_gas_price,
                     self.get_address(),
                 );
-                transaction.clone().nonce(new_nonce)
+                transaction.clone().gas_price(new_gas_price)
             } else {
                 transaction.clone()
             };
@@ -62,7 +61,7 @@ impl TransactionManager {
                             "Transaction {:?} already known, retrying with new nonce {:?}",
                             transaction, transaction.nonce
                         );
-                        adjust_nonce = true;
+                        adjust_gas_price = true;
                     };
 
                     error!(
