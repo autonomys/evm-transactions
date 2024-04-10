@@ -1,8 +1,14 @@
-use crate::{contract_calls::*, transaction_manager::TransactionManager};
+use crate::{
+    block_monitor::domain_block_monitor, contract_calls::*, transaction_manager::TransactionManager,
+};
 use ethers::prelude::*;
+use ethers::signers::Signer;
+use ethers_providers::Ws;
 use eyre::Result;
+use futures::prelude::future::join_all;
 use log::info;
 use rand::{thread_rng, Rng};
+use std::mem;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -184,4 +190,148 @@ pub async fn circle_of_transfers(
     }
 
     Ok(())
+}
+
+const TX_PER_BATCH: u32 = 50;
+
+async fn batch_send_fund(
+    tx_manager: TransactionManager,
+    fund_contract_address: Address,
+    fund_per_account: U256,
+    from: u32,
+    count: u32,
+    tx_per_batch: u32,
+) -> Result<()> {
+    let mut addresses = vec![];
+    for i in 0..count {
+        addresses.push(derive_wallet(from + i).address());
+        if (i != 0 && i % tx_per_batch == 0) || (i == count - 1) {
+            let tx = bulk_transfer_transaction(
+                mem::take(&mut addresses),
+                fund_per_account,
+                fund_contract_address,
+            )?
+            .from(tx_manager.get_address())
+            .chain_id(tx_manager.chain_id);
+
+            tx_manager
+                .client
+                .send_transaction(tx.clone(), None)
+                .await?
+                .confirmations(1)
+                .await?;
+        }
+    }
+    Ok(())
+}
+
+async fn submit_transfer(
+    provider: Arc<Provider<Ws>>,
+    chain_id: u64,
+    fund_per_account: U256,
+    tx_count: usize,
+) -> Result<()> {
+    let mut submitted_transfer = 0;
+    for idx in 0..tx_count {
+        let from = derive_wallet(idx as u32).with_chain_id(chain_id);
+        let to = derive_wallet(u32::MAX - idx as u32).address();
+        let tx = TransactionRequest::new()
+            .to(to)
+            .value(fund_per_account / 5)
+            .from(from.address());
+        if SignerMiddleware::new(provider.clone(), from)
+            .send_transaction(tx, None)
+            .await
+            .is_err()
+        {
+            continue;
+        }
+        submitted_transfer += 1;
+
+        if idx % 100 == 0 {
+            tokio::time::sleep(Duration::from_millis(1)).await;
+        }
+    }
+    info!(
+        "All transfer submitted, total_transfer {tx_count:?}, submitted_transfer {submitted_transfer:?}",
+    );
+    Ok(())
+}
+
+pub async fn concurrent_transfers(
+    provider: Arc<Provider<Ws>>,
+    tx_mgrs: Vec<TransactionManager>,
+    chain_id: u64,
+    fund_contract_address: Address,
+    funding_amount: U256,
+    tx_count: usize,
+    domain_id: u32,
+    consensus_url: String,
+    domain_url: String,
+) -> Result<()> {
+    // Pre fund
+    let concurrencies = tx_mgrs.len();
+    let tx_per_mgr = tx_count / concurrencies;
+    let fund_per_account = funding_amount / tx_per_mgr / 2;
+
+    let mut batch_send_funds = vec![];
+    for (i, tx_mgr) in tx_mgrs.into_iter().enumerate() {
+        let fut = batch_send_fund(
+            tx_mgr,
+            fund_contract_address,
+            fund_per_account,
+            (i * tx_per_mgr) as u32,
+            tx_per_mgr as u32,
+            concurrencies as u32,
+        );
+        batch_send_funds.push(fut);
+    }
+    for res in join_all(batch_send_funds).await {
+        if let Err(err) = res {
+            info!("Batch transfer failed, err {err:?}");
+            return Err(err.into());
+        }
+    }
+    info!("Batch pre-fund finish, start concurrent transfer");
+
+    let domain_block_monitor_fut =
+        domain_block_monitor(domain_id, consensus_url, domain_url, tx_count as u64);
+    let submit_transfer_fut =
+        submit_transfer(provider.clone(), chain_id, fund_per_account, tx_count);
+
+    let (domain_block_monitor_res, submit_transfer_res) =
+        tokio::join!(domain_block_monitor_fut, submit_transfer_fut);
+    if let Err(err) = domain_block_monitor_res {
+        info!("Domain block monitor failed, err {err:?}");
+    }
+    if let Err(err) = submit_transfer_res {
+        info!("Submit transfer failed, err {err:?}");
+    }
+
+    Ok(())
+}
+
+use ethers::core::k256::SecretKey;
+use ethers::signers::LocalWallet;
+
+fn derive_wallet(seed: u32) -> LocalWallet {
+    let key = {
+        let mut k = [1u8; 32];
+        (k[..4]).copy_from_slice(&seed.to_be_bytes()[..]);
+        k
+    };
+    let sk = SecretKey::from_slice(&key[..]).expect("Must success");
+    LocalWallet::from_bytes(sk.to_bytes().as_slice()).expect("Must success")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_types() {
+        derive_wallet(0);
+        derive_wallet(1);
+        derive_wallet(u32::MAX).address();
+    }
 }

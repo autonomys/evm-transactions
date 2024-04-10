@@ -1,4 +1,5 @@
 use ethers::prelude::*;
+use ethers_providers::Ws;
 use eyre::{Report, Result};
 use log::{debug, error, info};
 use std::{sync::Arc, time::Duration};
@@ -10,7 +11,7 @@ const RETRY_DELAY: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Clone)]
 pub struct TransactionManager {
-    pub client: Arc<SignerMiddleware<Arc<Provider<Http>>, LocalWallet>>,
+    pub client: Arc<SignerMiddleware<Arc<Provider<Ws>>, LocalWallet>>,
     pub wallet: LocalWallet,
     pub chain_id: u64,
     num_confirmations: usize,
@@ -18,7 +19,7 @@ pub struct TransactionManager {
 
 impl TransactionManager {
     pub fn new(
-        provider: Arc<Provider<Http>>,
+        provider: Arc<Provider<Ws>>,
         wallet: &LocalWallet,
         num_confirmations: usize,
     ) -> Self {

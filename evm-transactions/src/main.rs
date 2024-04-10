@@ -1,5 +1,7 @@
 #![feature(iter_map_windows)]
 
+mod block_monitor;
+mod consensus_chain;
 mod contract_calls;
 mod generate_transactions;
 mod transaction_manager;
@@ -7,6 +9,7 @@ mod transaction_manager;
 use contract_calls::*;
 use env_logger::Builder;
 use ethers::prelude::*;
+use ethers_providers::Ws;
 use eyre::{Report, Result};
 use futures::future::try_join_all;
 use generate_transactions::*;
@@ -36,7 +39,7 @@ struct Opt {
     tx_type: TransactionType,
 }
 
-#[derive(StructOpt, Debug)]
+#[derive(StructOpt, Debug, PartialEq)]
 enum TransactionType {
     /// Generate transaction with given weight/size
     SetArray {
@@ -49,6 +52,14 @@ enum TransactionType {
     CircleTransfer {
         /// Interval between transactions
         interval_second: usize,
+    },
+    ConcurrentTransfer {
+        domain_id: u32,
+        consensus_url: String,
+        domain_url: String,
+    },
+    ConsensusChainConcurrentTransfer {
+        consensus_url: String,
     },
 }
 
@@ -113,7 +124,19 @@ async fn main() -> Result<(), Report> {
         tx_type,
     } = Opt::from_args();
 
-    let provider = Arc::new(Provider::<Http>::try_from(rpc_url).map_err(Report::msg)?);
+    if let TransactionType::ConsensusChainConcurrentTransfer { consensus_url } = tx_type {
+        consensus_chain::consensus_chain_load_test(
+            consensus_url,
+            tx_count as u32,
+            num_accounts as u32,
+        )
+        .await?;
+        return Ok(());
+    }
+
+    let provider = Arc::new(Provider::new(
+        Ws::connect(rpc_url).await.map_err(Report::msg)?,
+    ));
     let chain_id: u64 = provider.get_chainid().await?.as_u64();
 
     let funder_tx_manager = {
@@ -176,6 +199,25 @@ async fn main() -> Result<(), Report> {
             )
             .await?;
         }
+        TransactionType::ConcurrentTransfer {
+            domain_id,
+            consensus_url,
+            domain_url,
+        } => {
+            concurrent_transfers(
+                provider,
+                acc_tx_mgrs,
+                chain_id,
+                fund_contract_address,
+                funding_amount,
+                tx_count,
+                domain_id,
+                consensus_url,
+                domain_url,
+            )
+            .await?;
+        }
+        _ => {}
     }
 
     Ok(())

@@ -14,13 +14,13 @@ pub(crate) fn bulk_transfer_transaction(
     let abi = include_str!("./abi/Fund.json");
     let contract_abi: Abi = from_str(abi)?;
     let function = contract_abi.function("transferTsscToMany")?;
-    let args = to_addresses.clone().into_token();
-    let calldata = function.encode_input(&[args])?;
-    let value = funding_amount.checked_mul(U256::from(to_addresses.clone().len()));
+    let addresses_num = to_addresses.len();
+    let value = funding_amount.checked_mul(U256::from(addresses_num));
+    let calldata = function.encode_input(&[to_addresses.into_token()])?;
 
-    info!(
+    log::debug!(
         "funding {:?} wallets with amount: {:?}. Total cost: {:?}",
-        to_addresses.len(),
+        addresses_num,
         format_units(funding_amount, 18),
         format_units(value.unwrap_or_default(), 18)
     );
