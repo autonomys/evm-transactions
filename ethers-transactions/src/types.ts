@@ -5,10 +5,9 @@ export interface LoadTestConfig {
   accountCount: number; // Number of accounts to use
   rpcUrl: string; // RPC endpoint URL
   chainId: number; // Chain ID
-  fundContractAddress: string; // Address of the Fund contract
   loadContractAddress: string; // Address of the Load contract
   arraySize: number; // Size of array for Load contract
-  keysFile?: string; // Path to the keys file
+  keysFile: string; // Path to the keys file
 }
 
 export interface Account {

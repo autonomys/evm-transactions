@@ -1,6 +1,6 @@
-import { JsonRpcProvider, Wallet } from 'ethers';
+import { JsonRpcProvider } from 'ethers';
 import { LoadTestConfig, TestResults } from './types';
-import { generateAccounts, fundAccounts } from './accountManager';
+import { loadAccounts } from './accountManager';
 import { executeTransaction } from './transactionExecutor';
 import createLogger from './logger';
 import * as fs from 'fs/promises';
@@ -14,7 +14,7 @@ const logProgress = (results: TestResults, elapsedSeconds: number, totalSeconds:
     `Current TPS: ${currentTps}`);
 };
 
-const runLoadTest = async (config: LoadTestConfig, funderPrivateKey: string): Promise<TestResults> => {
+const runLoadTest = async (config: LoadTestConfig): Promise<TestResults> => {
   // Create logs directory if it doesn't exist
   await fs.mkdir('logs', { recursive: true });
 
@@ -24,18 +24,15 @@ const runLoadTest = async (config: LoadTestConfig, funderPrivateKey: string): Pr
   logger.info('Starting load test', {
     config: {
       ...config,
-      funderPrivateKey: '***hidden***'
+      rpcUrl: config.rpcUrl.split('?')[0] // Remove any API keys from URL
     }
   });
 
   const provider = new JsonRpcProvider(config.rpcUrl);
-  const funderWallet = new Wallet(funderPrivateKey, provider);
-
-  // Generate and fund accounts
-  const accounts = await generateAccounts(config.accountCount, provider, config.keysFile);
-  await fundAccounts(accounts, config, funderWallet);
-
-  logger.info('Accounts ready', {
+  
+  // Load accounts from keys file
+  const accounts = await loadAccounts(config.keysFile, provider);
+  logger.info('Accounts loaded', {
     count: accounts.length,
     addresses: accounts.map(a => a.wallet.address)
   });

@@ -13,17 +13,17 @@ const getEnvVar = (key: string, defaultValue?: string): string => {
 
 export interface CLIArgs {
   duration?: number;
-  accountCount?: number;
+  accountCount: number;
   arraySize?: number;
-  keysFile?: string;
+  keysFile: string;
 }
 
 export const loadConfig = (cliArgs: CLIArgs): LoadTestConfig => ({
   duration: cliArgs.duration ?? parseInt(getEnvVar('TEST_DURATION', '60')),
-  accountCount: cliArgs.accountCount ?? parseInt(getEnvVar('ACCOUNT_COUNT', '10')),
+  accountCount: cliArgs.accountCount,
   rpcUrl: getEnvVar('RPC_URL'),
   chainId: parseInt(getEnvVar('CHAIN_ID')),
-  fundContractAddress: getEnvVar('FUND_CONTRACT_ADDRESS'),
   loadContractAddress: getEnvVar('LOAD_CONTRACT_ADDRESS'),
   arraySize: cliArgs.arraySize ?? parseInt(getEnvVar('ARRAY_SIZE', '100')),
+  keysFile: cliArgs.keysFile
 });
