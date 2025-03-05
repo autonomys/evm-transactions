@@ -7,6 +7,8 @@ use tokio::time::sleep;
 // Constants for retry strategy
 const MAX_RETRIES: u32 = 2;
 const RETRY_DELAY: Duration = Duration::from_secs(5);
+const GAS_PRICE_BUMP_PERCENT: u64 = 10;
+const MIN_PRIORITY_FEE: u64 = 2_000_000_000; // 2 gwei minimum tip
 
 #[derive(Debug, Clone)]
 pub struct TransactionManager {
@@ -33,36 +35,86 @@ impl TransactionManager {
         }
     }
 
-    pub async fn handle_transaction(&self, transaction: TransactionRequest) -> Result<(), Report> {
+    async fn get_base_fee(&self) -> Result<U256> {
+        let block = self.client.get_block(BlockNumber::Latest).await?;
+        Ok(block
+            .and_then(|b| b.base_fee_per_gas)
+            .unwrap_or_else(|| U256::from(1_000_000_000))) // fallback to 1 gwei if no base fee
+    }
+
+    async fn ensure_sufficient_gas_price(
+        &self,
+        transaction: &mut TransactionRequest,
+    ) -> Result<()> {
+        let base_fee = self.get_base_fee().await?;
+        let min_gas_price = base_fee + U256::from(MIN_PRIORITY_FEE);
+
+        let current_gas_price = transaction.gas_price.unwrap_or_else(|| min_gas_price);
+
+        if current_gas_price < min_gas_price {
+            info!(
+                "Adjusting gas price from {:?} to minimum required {:?} (base fee: {:?} + priority fee: {:?})",
+                current_gas_price,
+                min_gas_price,
+                base_fee,
+                MIN_PRIORITY_FEE
+            );
+            transaction.gas_price = Some(min_gas_price);
+        }
+
+        Ok(())
+    }
+
+    pub async fn handle_transaction(
+        &self,
+        mut transaction: TransactionRequest,
+    ) -> Result<(), Report> {
         let mut attempts = 0;
-        let mut adjust_gas_price = false;
 
         while attempts < MAX_RETRIES {
-            let transaction = if adjust_gas_price {
-                let gas_price = transaction.gas_price.unwrap_or_default();
-                let new_gas_price = gas_price.checked_add(100.into()).unwrap_or_default();
-                info!(
-                    "Attempt #{:?} Gas price was {:?}, will retry with gas price {:?} for wallet {:?}.",
-                    attempts,
-                    gas_price,
-                    &new_gas_price,
-                    self.get_address(),
-                );
-                transaction.clone().gas_price(new_gas_price)
-            } else {
-                transaction.clone()
-            };
+            // Get the current nonce if not set
+            if transaction.nonce.is_none() {
+                let nonce = self
+                    .client
+                    .get_transaction_count(self.get_address(), None)
+                    .await?;
+                transaction = transaction.clone().nonce(nonce);
+            }
+
+            // Ensure gas price is sufficient
+            self.ensure_sufficient_gas_price(&mut transaction).await?;
+
+            // On retry, increase gas price by percentage
+            if attempts > 0 {
+                if let Some(current_gas_price) = transaction.gas_price {
+                    let bump =
+                        current_gas_price * U256::from(GAS_PRICE_BUMP_PERCENT) / U256::from(100);
+                    let new_gas_price = current_gas_price + bump;
+                    info!(
+                        "Attempt #{:?}: Bumping gas price from {:?} to {:?} for wallet {:?}",
+                        attempts,
+                        current_gas_price,
+                        new_gas_price,
+                        self.get_address()
+                    );
+                    transaction = transaction.clone().gas_price(new_gas_price);
+                }
+            }
 
             match self.try_send_transaction(&transaction).await {
                 Ok(()) => return Ok(()),
                 Err(e) if attempts < MAX_RETRIES => {
                     if e.to_string().contains("already known") {
-                        info!(
-                            "Transaction {:?} already known, retrying with new nonce {:?}",
-                            transaction, transaction.nonce
-                        );
-                        adjust_gas_price = true;
-                    };
+                        // For already known transactions, increment the nonce and try again
+                        if let Some(current_nonce) = transaction.nonce {
+                            let new_nonce = current_nonce + U256::from(1);
+                            info!(
+                                "Transaction already known, incrementing nonce from {:?} to {:?}",
+                                current_nonce, new_nonce
+                            );
+                            transaction = transaction.clone().nonce(new_nonce);
+                        }
+                    }
 
                     error!(
                         "Error sending transaction, retry #{:?} from wallet {:?}: {:?}",

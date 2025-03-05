@@ -10,7 +10,7 @@ use ethers::prelude::*;
 use eyre::{Report, Result};
 use futures::future::try_join_all;
 use generate_transactions::*;
-use log::{info, LevelFilter};
+use log::LevelFilter;
 use std::env;
 use std::sync::Arc;
 use structopt::StructOpt;
