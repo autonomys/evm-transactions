@@ -4,6 +4,9 @@ import LoadABI from './abi/Load.json';
 
 const MAX_RETRIES = 3;
 const GAS_BUFFER_PERCENTAGE = 20n; // Add 20% to estimated gas
+const BASE_FEE = 1000000000n; // 1 gwei
+const PRIORITY_FEE = 100000000n; // 0.1 gwei
+const FEE_ESCALATION_FACTOR = 1.2; // 20% increase per retry
 
 export const executeTransaction = async (account: Account, config: LoadTestConfig): Promise<TransactionResult> => {
   const loadContract = new Contract(config.loadContractAddress, LoadABI, account.wallet);
@@ -33,9 +36,14 @@ export const executeTransaction = async (account: Account, config: LoadTestConfi
         };
       }
 
+      // Calculate escalated fees based on retry count
+      const escalationMultiplier = Math.pow(FEE_ESCALATION_FACTOR, retries);
+      const maxFeePerGas = BigInt(Math.floor(Number(BASE_FEE) * escalationMultiplier));
+      const maxPriorityFeePerGas = BigInt(Math.floor(Number(PRIORITY_FEE) * escalationMultiplier));
+
       // Check if account has enough balance for estimated gas
       const balance = await account.wallet.provider.getBalance(account.wallet.address);
-      const estimatedGasCost = gasLimit * 1000000000n; // Using 1 gwei max fee
+      const estimatedGasCost = gasLimit * maxFeePerGas;
 
       if (balance < estimatedGasCost) {
         return {
@@ -48,8 +56,8 @@ export const executeTransaction = async (account: Account, config: LoadTestConfi
 
       const tx = await loadContract.setArray(config.arraySize, {
         nonce: account.nonce,
-        maxFeePerGas: 1000000000n, // 1 gwei
-        maxPriorityFeePerGas: 100000000n, // 0.1 gwei
+        maxFeePerGas,
+        maxPriorityFeePerGas,
         gasLimit,
       });
 
@@ -73,8 +81,14 @@ export const executeTransaction = async (account: Account, config: LoadTestConfi
         };
       }
 
-      // If it's a nonce or already known error, wait a bit before retrying
-      if (error.message.includes('nonce') || error.message.includes('already known')) {
+      // Handle specific error cases
+      if (
+        error.code === 'REPLACEMENT_UNDERPRICED' ||
+        error.message.includes('replacement transaction underpriced') ||
+        error.message.includes('nonce too low') ||
+        error.message.includes('already known')
+      ) {
+        // Wait longer for each retry
         await new Promise(resolve => setTimeout(resolve, 1000 * retries));
         continue;
       }
