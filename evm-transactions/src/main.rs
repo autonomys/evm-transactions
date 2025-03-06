@@ -41,7 +41,7 @@ enum TransactionType {
     /// Generate transaction with given weight/size
     SetArray {
         /// Measurement of how heavy a transaction should be, values between 1-2000 are appropriate
-        set_array_count: U256,
+        set_array_count: usize,
     },
     /// Generate chain of transfer transaction, i.e. A->B, B->C, ..
     ChainTransfer,
@@ -149,7 +149,7 @@ async fn main() -> Result<(), Report> {
                         tx_mgr,
                         tx_count,
                         load_contract_address,
-                        set_array_count,
+                        set_array_count.into(),
                     )
                 })
                 .collect::<Vec<_>>();

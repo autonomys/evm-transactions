@@ -9,6 +9,15 @@ contract Load {
     // ===========Storage==========================
     mapping(address => uint256[]) public arr1;
 
+    event SetArrayValue(
+        address wallet,
+        uint256 index,
+        uint256 value,
+        uint256 count
+    );
+
+    event SetArrayComplete(address wallet, uint256 count, uint256 timestamp);
+
     // ===========Functions=========================
 
     /// @dev Calculate factorial of a number
@@ -29,9 +38,12 @@ contract Load {
         arr[2] = 3;
 
         for (uint256 i = 0; i < count; ++i) {
-            arr[i] = i * i * i * i;
+            uint256 value = i * i * i * i;
+            arr[i] = value;
+            emit SetArrayValue(msg.sender, i, value, count);
         }
 
         arr1[msg.sender] = arr;
+        emit SetArrayComplete(msg.sender, count, block.timestamp);
     }
 }
