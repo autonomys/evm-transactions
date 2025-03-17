@@ -4,7 +4,6 @@ import LoadABI from './abi/Load.json';
 
 const MAX_RETRIES = 3;
 const GAS_BUFFER_PERCENTAGE = 20n; // Add 20% to estimated gas
-const BASE_FEE = 1000000000n; // 1 gwei
 const PRIORITY_FEE = 100000000n; // 0.1 gwei
 const FEE_ESCALATION_FACTOR = 1.2; // 20% increase per retry
 
@@ -36,9 +35,14 @@ export const executeTransaction = async (account: Account, config: LoadTestConfi
         };
       }
 
+      // get gasPrice
+      const feeData = await account.wallet.provider.getFeeData();
+      const gasPrice = feeData.gasPrice;
+
+
       // Calculate escalated fees based on retry count
       const escalationMultiplier = Math.pow(FEE_ESCALATION_FACTOR, retries);
-      const maxFeePerGas = BigInt(Math.floor(Number(BASE_FEE) * escalationMultiplier));
+      const maxFeePerGas = BigInt(Math.floor(Number(gasPrice) * escalationMultiplier));
       const maxPriorityFeePerGas = BigInt(Math.floor(Number(PRIORITY_FEE) * escalationMultiplier));
 
       // Check if account has enough balance for estimated gas
