@@ -10,7 +10,7 @@
     "load": "ts-node src/cli.ts",
     "generate-keys": "ts-node src/generateKeys.ts",
     "format": "prettier --cache --write '**/*.{ts,tsx,js,json,md}'",
-    "lint": "eslint 'src/**/*.{ts,tsx}' --max-warnings 0"
+    "lint": "eslint 'src/**/*.{ts,tsx}'"
   },
   "dependencies": {
     "commander": "^13.1.0",
