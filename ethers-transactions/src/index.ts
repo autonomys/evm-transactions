@@ -4,7 +4,6 @@ import { loadAccounts } from './accountManager';
 import { executeTransaction } from './transactionExecutor';
 import createLogger from './logger';
 import * as fs from 'fs/promises';
-import path from 'path';
 
 const logProgress = (results: TestResults, elapsedSeconds: number, totalSeconds: number) => {
   const progress = ((elapsedSeconds / totalSeconds) * 100).toFixed(1);
@@ -70,7 +69,7 @@ const runLoadTest = async (config: LoadTestConfig): Promise<TestResults> => {
       });
 
       if (result.success) {
-        account.nonce++;
+        account.nonce = (account.nonce || 0) + 1;
         results.successfulTransactions++;
       } else {
         results.failedTransactions++;

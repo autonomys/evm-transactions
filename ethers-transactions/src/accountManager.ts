@@ -20,7 +20,7 @@ export const loadAccounts = async (
 
     const accounts = keyStore.accounts.map((account) => ({
       wallet: new Wallet(account.privateKey, provider),
-      nonce: 0,
+      nonce: undefined, // Will be fetched when needed
     }));
 
     console.log(`Successfully loaded ${accounts.length} accounts`);

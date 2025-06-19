@@ -1,9 +1,8 @@
 import { Command } from 'commander';
-import { JsonRpcProvider, parseEther, Wallet } from 'ethers';
+import { JsonRpcProvider, parseEther } from 'ethers';
 import { config as dotenvConfig } from 'dotenv';
 import * as path from 'path';
-import * as fs from 'fs/promises';
-import { Account, KeyStore, TestResults } from './types';
+import { Account, TestResults } from './types';
 import { loadAccounts } from './accountManager';
 import createLogger from './logger';
 
@@ -14,7 +13,7 @@ const BASE_FEE = 1000000000n; // 1 gwei
 const PRIORITY_FEE = 100000000n; // 0.1 gwei
 const FEE_ESCALATION_FACTOR = 1.2; // 20% increase per retry
 const TRANSFER_GAS_LIMIT = 21000n; // Standard gas limit for ETH transfers
-const BATCH_SIZE = 1500; // Number of concurrent transactions per batch
+const BATCH_SIZE = 2000; // Number of concurrent transactions per batch
 const LOG_BATCH_SIZE = 50; // Number of transactions to accumulate before writing to log
 
 const program = new Command();
@@ -42,8 +41,13 @@ const executeTransfer = async (
   retries = 0,
 ): Promise<TransferResult> => {
   try {
-    // Always get fresh nonce from network
-    account.nonce = await account.wallet.getNonce();
+    // Add small random delay to prevent timing conflicts
+    await new Promise((resolve) => setTimeout(resolve, Math.random() * 50));
+
+    // Get fresh nonce from network only on first attempt or retry
+    if (retries === 0 || account.nonce === undefined) {
+      account.nonce = await account.wallet.getNonce();
+    }
 
     if (!account.wallet.provider) {
       throw new Error('Provider not connected');
@@ -88,6 +92,15 @@ const executeTransfer = async (
       success: true,
     };
   } catch (error: any) {
+    // Handle transaction replacement as success if the replacement succeeded
+    if (error.code === 'TRANSACTION_REPLACED' && error.replacement && error.receipt) {
+      return {
+        hash: error.replacement.hash || error.receipt.hash,
+        from: account.wallet.address,
+        success: true,
+      };
+    }
+
     if (
       retries < MAX_RETRIES &&
       (error.code === 'REPLACEMENT_UNDERPRICED' ||
@@ -117,8 +130,19 @@ const processBatch = async (
   pendingLogs: any[],
 ) => {
   const batchAccounts = accounts.slice(0, BATCH_SIZE);
+
+  // Initialize nonces for all accounts in the batch
+  await Promise.all(
+    batchAccounts.map(async (account) => {
+      if (account.nonce === undefined) {
+        account.nonce = await account.wallet.getNonce();
+      }
+    }),
+  );
+
   const promises = batchAccounts.map(async (account) => {
     const txStartTime = Date.now();
+    const currentNonce = account.nonce!; // Use current nonce value
     const result = await executeTransfer(account, recipient, amount);
     const txDuration = Date.now() - txStartTime;
 
@@ -129,14 +153,16 @@ const processBatch = async (
       hash: result.hash,
       success: result.success,
       error: result.error,
-      nonce: account.nonce,
+      nonce: currentNonce,
       durationMs: txDuration,
     });
 
     if (result.success) {
-      account.nonce++;
+      account.nonce = currentNonce + 1; // Increment nonce locally
       results.successfulTransactions++;
     } else {
+      // Reset nonce on failure to get fresh one next time
+      account.nonce = undefined;
       results.failedTransactions++;
       results.errors.push({
         account: account.wallet.address,
