@@ -13,7 +13,7 @@ const BASE_FEE = 1000000000n; // 1 gwei
 const PRIORITY_FEE = 100000000n; // 0.1 gwei
 const FEE_ESCALATION_FACTOR = 1.2; // 20% increase per retry
 const TRANSFER_GAS_LIMIT = 21000n; // Standard gas limit for ETH transfers
-const BATCH_SIZE = 500; // Number of concurrent transactions per batch
+const BATCH_SIZE = 2000; // Number of concurrent transactions per batch
 const LOG_BATCH_SIZE = 50; // Number of transactions to accumulate before writing to log
 const NONCE_FETCH_CHUNK_SIZE = 50; // Number of nonces to fetch concurrently
 
@@ -128,12 +128,13 @@ const processBatch = async (
   results: TestResults,
   logger: ReturnType<typeof createLogger>,
   pendingLogs: any[],
-  provider: JsonRpcProvider,
+  providers: JsonRpcProvider[],
 ) => {
   const batchAccounts = accounts.slice(0, BATCH_SIZE);
 
-  // Get current base fee once per batch
-  const latestBlock = await provider.getBlock('latest');
+  // Get current base fee once per batch (round-robin across providers for load balancing)
+  const providerForBaseFee = providers[Math.floor(Math.random() * providers.length)];
+  const latestBlock = await providerForBaseFee.getBlock('latest');
   const currentBaseFee = latestBlock?.baseFeePerGas ?? BASE_FEE;
 
   // Initialize nonces for all accounts in the batch (chunked to prevent RPC overload)
@@ -141,8 +142,19 @@ const processBatch = async (
   for (let i = 0; i < accountsNeedingNonces.length; i += NONCE_FETCH_CHUNK_SIZE) {
     const chunk = accountsNeedingNonces.slice(i, i + NONCE_FETCH_CHUNK_SIZE);
     await Promise.all(
-      chunk.map(async (account) => {
-        account.nonce = await account.wallet.getNonce();
+      chunk.map(async (account, index) => {
+        // Load balance nonce fetching across all providers
+        const providerIndex = index % providers.length;
+        const selectedProvider = providers[providerIndex];
+
+        if (providerIndex === 0) {
+          // Use primary provider (account's default)
+          account.nonce = await account.wallet.getNonce();
+        } else {
+          // Create a temporary wallet with selected provider for nonce fetching
+          const tempWallet = account.wallet.connect(selectedProvider);
+          account.nonce = await tempWallet.getNonce();
+        }
       }),
     );
   }
@@ -200,8 +212,31 @@ const runTransferLoadTest = async () => {
   const keysPath = path.join('keys', opts.keysFile);
   console.log('Loading accounts from:', keysPath);
 
-  const provider = new JsonRpcProvider(process.env.RPC_URL);
-  const accounts = await loadAccounts(keysPath, provider);
+  // Setup RPC providers from comma-separated list
+  const rpcUrls = process.env.RPC_URL;
+
+  if (!rpcUrls) {
+    throw new Error('RPC_URL environment variable is required');
+  }
+
+  const rpcUrlList = rpcUrls
+    .split(',')
+    .map((url) => url.trim())
+    .filter((url) => url.length > 0);
+
+  if (rpcUrlList.length === 0) {
+    throw new Error('At least one RPC URL must be provided in RPC_URL');
+  }
+
+  const providers = rpcUrlList.map((url) => new JsonRpcProvider(url));
+  const primaryProvider = providers[0];
+
+  console.log(`Found ${providers.length} RPC endpoint(s):`);
+  rpcUrlList.forEach((url, index) => {
+    console.log(`  RPC ${index + 1}: ${url.split('?')[0]}`);
+  });
+
+  const accounts = await loadAccounts(keysPath, primaryProvider);
   const transferAmount = parseEther(opts.amount);
 
   logger.info('Starting transfer load test', {
@@ -209,7 +244,8 @@ const runTransferLoadTest = async () => {
     accountCount: accounts.length,
     recipient: opts.to,
     amountEth: opts.amount,
-    rpcUrl: process.env.RPC_URL?.split('?')[0], // Remove any API keys from URL
+    rpcEndpoints: rpcUrlList.map((url) => url.split('?')[0]), // Remove any API keys from URLs
+    rpcCount: providers.length,
   });
 
   console.log('\nStarting transfer load test with configuration:');
@@ -220,6 +256,9 @@ const runTransferLoadTest = async () => {
   console.log(`Recipient: ${opts.to}`);
   console.log(`Using accounts from: ${keysPath}`);
   console.log(`Batch Size: ${BATCH_SIZE} concurrent transactions`);
+  console.log(
+    `Load Balancing: ${providers.length > 1 ? `Enabled (${providers.length} RPCs)` : 'Disabled (1 RPC)'}`,
+  );
   console.log('\nPress Ctrl+C to stop the test\n');
 
   const results: TestResults = {
@@ -237,7 +276,15 @@ const runTransferLoadTest = async () => {
 
   try {
     while (Date.now() < endTime) {
-      await processBatch(accounts, opts.to, transferAmount, results, logger, pendingLogs, provider);
+      await processBatch(
+        accounts,
+        opts.to,
+        transferAmount,
+        results,
+        logger,
+        pendingLogs,
+        providers,
+      );
 
       // Update progress every second
       const now = Date.now();
