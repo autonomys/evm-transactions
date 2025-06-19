@@ -12,7 +12,7 @@ export interface LoadTestConfig {
 
 export interface Account {
   wallet: Wallet;
-  nonce: number;
+  nonce: number | undefined;
 }
 
 export interface TransactionResult {
