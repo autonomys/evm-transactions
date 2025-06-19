@@ -51,7 +51,9 @@ const executeTransfer = async (
 
     // Calculate escalated fees based on retry count
     const escalationMultiplier = Math.pow(FEE_ESCALATION_FACTOR, retries);
-    const maxFeePerGas = BigInt(Math.floor(Number(BASE_FEE) * escalationMultiplier));
+    const latestBlock = await account.wallet.provider.getBlock('latest');
+    const currentBaseFee = latestBlock?.baseFeePerGas ?? BASE_FEE;
+    const maxFeePerGas = BigInt(Math.floor(Number(currentBaseFee) * 1.5 * escalationMultiplier));
     const maxPriorityFeePerGas = BigInt(Math.floor(Number(PRIORITY_FEE) * escalationMultiplier));
 
     // Check if account has enough balance
