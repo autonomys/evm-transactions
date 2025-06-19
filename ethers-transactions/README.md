@@ -90,7 +90,7 @@ Tests native token transfers between accounts:
 
 ```bash
 # Run transfer load test - send 0.01 tokens to specific address for 5 minutes
-yarn ts-node src/transferLoadTest.ts -d 300 -k my-accounts.json -t 0x518EbE66287140e9378b9F8D00797291A8dfc2bc -a 0.01
+yarn transfer-load-test -d 300 -k my-accounts.json -t 0x518EbE66287140e9378b9F8D00797291A8dfc2bc -a 0.01
 ```
 
 Options:

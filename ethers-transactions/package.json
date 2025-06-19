@@ -9,6 +9,7 @@
     "test": "ts-node src/test.ts",
     "load": "ts-node src/cli.ts",
     "generate-keys": "ts-node src/generateKeys.ts",
+    "transfer-load-test": "node --max-old-space-size=12288 node_modules/.bin/ts-node src/transferLoadTest.ts",
     "format": "prettier --cache --write '**/*.{ts,tsx,js,json,md}'",
     "lint": "eslint 'src/**/*.{ts,tsx}'"
   },
