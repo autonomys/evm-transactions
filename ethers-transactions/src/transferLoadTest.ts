@@ -13,8 +13,9 @@ const BASE_FEE = 1000000000n; // 1 gwei
 const PRIORITY_FEE = 100000000n; // 0.1 gwei
 const FEE_ESCALATION_FACTOR = 1.2; // 20% increase per retry
 const TRANSFER_GAS_LIMIT = 21000n; // Standard gas limit for ETH transfers
-const BATCH_SIZE = 2000; // Number of concurrent transactions per batch
+const BATCH_SIZE = 500; // Number of concurrent transactions per batch
 const LOG_BATCH_SIZE = 50; // Number of transactions to accumulate before writing to log
+const NONCE_FETCH_CHUNK_SIZE = 50; // Number of nonces to fetch concurrently
 
 const program = new Command();
 
@@ -38,6 +39,7 @@ const executeTransfer = async (
   account: Account,
   recipient: string,
   amount: bigint,
+  currentBaseFee: bigint,
   retries = 0,
 ): Promise<TransferResult> => {
   try {
@@ -55,8 +57,6 @@ const executeTransfer = async (
 
     // Calculate escalated fees based on retry count
     const escalationMultiplier = Math.pow(FEE_ESCALATION_FACTOR, retries);
-    const latestBlock = await account.wallet.provider.getBlock('latest');
-    const currentBaseFee = latestBlock?.baseFeePerGas ?? BASE_FEE;
     const maxFeePerGas = BigInt(Math.floor(Number(currentBaseFee) * 1.5 * escalationMultiplier));
     const maxPriorityFeePerGas = BigInt(Math.floor(Number(PRIORITY_FEE) * escalationMultiplier));
 
@@ -109,7 +109,7 @@ const executeTransfer = async (
         error.message.includes('already known'))
     ) {
       await new Promise((resolve) => setTimeout(resolve, 1000 * (retries + 1)));
-      return executeTransfer(account, recipient, amount, retries + 1);
+      return executeTransfer(account, recipient, amount, currentBaseFee, retries + 1);
     }
 
     return {
@@ -128,22 +128,29 @@ const processBatch = async (
   results: TestResults,
   logger: ReturnType<typeof createLogger>,
   pendingLogs: any[],
+  provider: JsonRpcProvider,
 ) => {
   const batchAccounts = accounts.slice(0, BATCH_SIZE);
 
-  // Initialize nonces for all accounts in the batch
-  await Promise.all(
-    batchAccounts.map(async (account) => {
-      if (account.nonce === undefined) {
+  // Get current base fee once per batch
+  const latestBlock = await provider.getBlock('latest');
+  const currentBaseFee = latestBlock?.baseFeePerGas ?? BASE_FEE;
+
+  // Initialize nonces for all accounts in the batch (chunked to prevent RPC overload)
+  const accountsNeedingNonces = batchAccounts.filter((account) => account.nonce === undefined);
+  for (let i = 0; i < accountsNeedingNonces.length; i += NONCE_FETCH_CHUNK_SIZE) {
+    const chunk = accountsNeedingNonces.slice(i, i + NONCE_FETCH_CHUNK_SIZE);
+    await Promise.all(
+      chunk.map(async (account) => {
         account.nonce = await account.wallet.getNonce();
-      }
-    }),
-  );
+      }),
+    );
+  }
 
   const promises = batchAccounts.map(async (account) => {
     const txStartTime = Date.now();
     const currentNonce = account.nonce!; // Use current nonce value
-    const result = await executeTransfer(account, recipient, amount);
+    const result = await executeTransfer(account, recipient, amount, currentBaseFee);
     const txDuration = Date.now() - txStartTime;
 
     // Store log entry
@@ -230,7 +237,7 @@ const runTransferLoadTest = async () => {
 
   try {
     while (Date.now() < endTime) {
-      await processBatch(accounts, opts.to, transferAmount, results, logger, pendingLogs);
+      await processBatch(accounts, opts.to, transferAmount, results, logger, pendingLogs, provider);
 
       // Update progress every second
       const now = Date.now();
