@@ -7,11 +7,13 @@ import * as fs from 'fs/promises';
 import path from 'path';
 
 const logProgress = (results: TestResults, elapsedSeconds: number, totalSeconds: number) => {
-  const progress = (elapsedSeconds / totalSeconds * 100).toFixed(1);
+  const progress = ((elapsedSeconds / totalSeconds) * 100).toFixed(1);
   const currentTps = (results.totalTransactions / elapsedSeconds).toFixed(2);
-  process.stdout.write(`\rProgress: ${progress}% | Transactions: ${results.totalTransactions} | ` +
-    `Success: ${results.successfulTransactions} | Failed: ${results.failedTransactions} | ` +
-    `Current TPS: ${currentTps}`);
+  process.stdout.write(
+    `\rProgress: ${progress}% | Transactions: ${results.totalTransactions} | ` +
+      `Success: ${results.successfulTransactions} | Failed: ${results.failedTransactions} | ` +
+      `Current TPS: ${currentTps}`,
+  );
 };
 
 const runLoadTest = async (config: LoadTestConfig): Promise<TestResults> => {
@@ -24,17 +26,17 @@ const runLoadTest = async (config: LoadTestConfig): Promise<TestResults> => {
   logger.info('Starting load test', {
     config: {
       ...config,
-      rpcUrl: config.rpcUrl.split('?')[0] // Remove any API keys from URL
-    }
+      rpcUrl: config.rpcUrl.split('?')[0], // Remove any API keys from URL
+    },
   });
 
   const provider = new JsonRpcProvider(config.rpcUrl);
-  
+
   // Load accounts from keys file
   const accounts = await loadAccounts(config.keysFile, provider);
   logger.info('Accounts loaded', {
     count: accounts.length,
-    addresses: accounts.map(a => a.wallet.address)
+    addresses: accounts.map((a) => a.wallet.address),
   });
 
   console.log(`\nStarting load test with ${accounts.length} accounts...`);
@@ -53,7 +55,7 @@ const runLoadTest = async (config: LoadTestConfig): Promise<TestResults> => {
   let lastLogTime = startTime;
 
   while (Date.now() < endTime) {
-    const promises = accounts.map(async account => {
+    const promises = accounts.map(async (account) => {
       const txStartTime = Date.now();
       const result = await executeTransaction(account, config);
       const txDuration = Date.now() - txStartTime;
@@ -64,7 +66,7 @@ const runLoadTest = async (config: LoadTestConfig): Promise<TestResults> => {
         success: result.success,
         error: result.error,
         nonce: account.nonce,
-        durationMs: txDuration
+        durationMs: txDuration,
       });
 
       if (result.success) {
@@ -96,7 +98,7 @@ const runLoadTest = async (config: LoadTestConfig): Promise<TestResults> => {
 
   logger.info('Load test completed', {
     results,
-    durationSeconds: duration
+    durationSeconds: duration,
   });
 
   // Clear the progress line and add a newline

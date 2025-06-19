@@ -15,7 +15,7 @@ const PRIORITY_FEE = 100000000n; // 0.1 gwei
 const FEE_ESCALATION_FACTOR = 1.2; // 20% increase per retry
 const TRANSFER_GAS_LIMIT = 21000n; // Standard gas limit for ETH transfers
 const BATCH_SIZE = 1500; // Number of concurrent transactions per batch
-const LOG_BATCH_SIZE = 1000; // Number of transactions to accumulate before writing to log
+const LOG_BATCH_SIZE = 50; // Number of transactions to accumulate before writing to log
 
 const program = new Command();
 
@@ -39,7 +39,7 @@ const executeTransfer = async (
   account: Account,
   recipient: string,
   amount: bigint,
-  retries = 0
+  retries = 0,
 ): Promise<TransferResult> => {
   try {
     // Always get fresh nonce from network
@@ -93,7 +93,7 @@ const executeTransfer = async (
         error.message.includes('nonce too low') ||
         error.message.includes('already known'))
     ) {
-      await new Promise(resolve => setTimeout(resolve, 1000 * (retries + 1)));
+      await new Promise((resolve) => setTimeout(resolve, 1000 * (retries + 1)));
       return executeTransfer(account, recipient, amount, retries + 1);
     }
 
@@ -112,10 +112,10 @@ const processBatch = async (
   amount: bigint,
   results: TestResults,
   logger: ReturnType<typeof createLogger>,
-  pendingLogs: any[]
+  pendingLogs: any[],
 ) => {
   const batchAccounts = accounts.slice(0, BATCH_SIZE);
-  const promises = batchAccounts.map(async account => {
+  const promises = batchAccounts.map(async (account) => {
     const txStartTime = Date.now();
     const result = await executeTransfer(account, recipient, amount);
     const txDuration = Date.now() - txStartTime;
@@ -148,7 +148,7 @@ const processBatch = async (
 
   // Write accumulated logs if threshold reached
   if (pendingLogs.length >= LOG_BATCH_SIZE) {
-    pendingLogs.forEach(log => logger.info('Transfer completed', log));
+    pendingLogs.forEach((log) => logger.info('Transfer completed', log));
     pendingLogs.length = 0; // Clear array while maintaining reference
   }
 
@@ -213,7 +213,7 @@ const runTransferLoadTest = async () => {
         process.stdout.write(
           `\rProgress: ${progress}% | Transactions: ${results.totalTransactions} | ` +
             `Success: ${results.successfulTransactions} | Failed: ${results.failedTransactions} | ` +
-            `Current TPS: ${currentTps}`
+            `Current TPS: ${currentTps}`,
         );
         lastLogTime = now;
 
@@ -226,7 +226,7 @@ const runTransferLoadTest = async () => {
   } finally {
     // Write any remaining logs
     if (pendingLogs.length > 0) {
-      pendingLogs.forEach(log => logger.info('Transfer completed', log));
+      pendingLogs.forEach((log) => logger.info('Transfer completed', log));
     }
   }
 
@@ -258,7 +258,7 @@ const runTransferLoadTest = async () => {
   console.log(`\nDetailed logs written to: logs/loadtest-${testId}.log`);
 };
 
-runTransferLoadTest().catch(error => {
+runTransferLoadTest().catch((error) => {
   console.error('Error running transfer load test:', error);
   process.exit(1);
 });

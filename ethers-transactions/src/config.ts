@@ -8,7 +8,7 @@ const getEnvVar = (key: string, defaultValue?: string): string => {
   if (!value && defaultValue === undefined) {
     throw new Error(`Environment variable ${key} is required but not set`);
   }
-  return value || defaultValue as string;
+  return value || (defaultValue as string);
 };
 
 export interface CLIArgs {
@@ -25,5 +25,5 @@ export const loadConfig = (cliArgs: CLIArgs): LoadTestConfig => ({
   chainId: parseInt(getEnvVar('CHAIN_ID')),
   loadContractAddress: getEnvVar('LOAD_CONTRACT_ADDRESS'),
   arraySize: cliArgs.arraySize ?? parseInt(getEnvVar('ARRAY_SIZE', '100')),
-  keysFile: cliArgs.keysFile
+  keysFile: cliArgs.keysFile,
 });

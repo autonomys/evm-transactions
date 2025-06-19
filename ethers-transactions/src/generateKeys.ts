@@ -82,12 +82,14 @@ const main = async () => {
 
     for (let i = 0; i < accounts.length; i += 150) {
       const batch = accounts.slice(i, Math.min(i + 150, accounts.length));
-      const addresses = batch.map(account => account.address);
+      const addresses = batch.map((account) => account.address);
       const tx = await fundContract.transferTsscToMany(addresses, {
         value: fundAmount * BigInt(addresses.length),
       });
       await tx.wait();
-      console.log(`Funded batch of ${addresses.length} accounts with ${formatEther(fundAmount)} TSSC each`);
+      console.log(
+        `Funded batch of ${addresses.length} accounts with ${formatEther(fundAmount)} TSSC each`,
+      );
     }
 
     console.log('All accounts generated and funded successfully!');

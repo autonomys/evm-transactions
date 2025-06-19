@@ -7,7 +7,10 @@ const GAS_BUFFER_PERCENTAGE = 20n; // Add 20% to estimated gas
 const PRIORITY_FEE = 100000000n; // 0.1 gwei
 const FEE_ESCALATION_FACTOR = 1.2; // 20% increase per retry
 
-export const executeTransaction = async (account: Account, config: LoadTestConfig): Promise<TransactionResult> => {
+export const executeTransaction = async (
+  account: Account,
+  config: LoadTestConfig,
+): Promise<TransactionResult> => {
   const loadContract = new Contract(config.loadContractAddress, LoadABI, account.wallet);
   let retries = 0;
 
@@ -38,7 +41,6 @@ export const executeTransaction = async (account: Account, config: LoadTestConfi
       // get gasPrice
       const feeData = await account.wallet.provider.getFeeData();
       const gasPrice = feeData.gasPrice;
-
 
       // Calculate escalated fees based on retry count
       const escalationMultiplier = Math.pow(FEE_ESCALATION_FACTOR, retries);
@@ -93,7 +95,7 @@ export const executeTransaction = async (account: Account, config: LoadTestConfi
         error.message.includes('already known')
       ) {
         // Wait longer for each retry
-        await new Promise(resolve => setTimeout(resolve, 1000 * retries));
+        await new Promise((resolve) => setTimeout(resolve, 1000 * retries));
         continue;
       }
 
